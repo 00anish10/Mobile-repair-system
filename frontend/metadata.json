@@ -1,0 +1,6 @@
+{
+  "name": "Moon Mobile Repair",
+  "description": "Professional mobile phone, tablet, and electronics repair service with certified technicians, genuine parts, upfront pricing, and warranty.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
