@@ -1,63 +1,51 @@
 import React from 'react';
 
-const sizes = {
-  small: '64px',
-  medium: '128px',
-  large: '256px',
-};
-
-const variants = {
-  shimmer: 'bg-slate-100 animate-shimmer',
-  bg: 'bg-slate-100',
-};
-
-export const SkeletonLoader: React.FC<{
+interface SkeletonProps {
   width?: string | number;
   height?: string | number;
   variant?: 'shimmer' | 'bg';
-  size?: 'small' | 'medium' | 'large';
-}> = ({
+  className?: string;
+}
+
+function toCssSize(value: string | number | undefined, fallback: string): string {
+  if (value === undefined) return fallback;
+  return typeof value === 'number' ? `${value}px` : value;
+}
+
+export const SkeletonLoader: React.FC<SkeletonProps> = ({
   width = '100%',
-  height = '20',
+  height = 20,
   variant = 'shimmer',
-  size = 'medium',
-}) => {
-  const sizeValue = sizes[size];
-  const widthStyle = typeof width === 'number' ? `${width}px` : `${width}%`;
-  const heightStyle = typeof height === 'number' ? `${height}px` : `${height}px`;
+  className = '',
+}) => (
+  <div
+    aria-hidden="true"
+    className={`rounded-xl ${variant === 'shimmer' ? 'animate-shimmer' : 'bg-slate-200'} ${className}`}
+    style={{
+      width: toCssSize(width, '100%'),
+      height: toCssSize(height, '20px'),
+    }}
+  />
+);
 
-  return (
-    <div
-      className={`animate-shimmer rounded-xl ${variant} w-full ${widthStyle} h-${sizeValue}`}
-    />
-  );
-};
+export const SkeletonTitle: React.FC<{ className?: string; width?: string | number }> = ({
+  className = '',
+  width = '60%',
+}) => (
+  <SkeletonLoader height={28} width={width} className={`mb-3 ${className}`} />
+);
 
-export const SkeletonTitle: React.FC<{
-  size?: 'small' | 'medium' | 'large';
-  className?: string;
-}> = ({
-  size = 'medium',
-  className,
-}) => {
-  const sizes = { small: '12px', medium: '14px', large: '18px' };
-  return (
-    <div
-      className={`rounded-bxl ${sizes[size]} h-[${sizes[size]}] animate-shimmer ${className || ''}`}
-    />
-  );
-};
-
-export const SkeletonParagraph: React.FC<{
-  lines?: number;
-  className?: string;
-}> = ({
+export const SkeletonParagraph: React.FC<{ lines?: number; className?: string }> = ({
   lines = 2,
-  className,
-}) => {
-  return (
-    <div
-      className={`h-[calc(${lines} * 1rem+8px)] rounded-md animate-shimmer ${className || ''}`}
-    />
-  );
-};
+  className = '',
+}) => (
+  <div className={`space-y-2 ${className}`}>
+    {Array.from({ length: lines }).map((_, index) => (
+      <SkeletonLoader
+        key={index}
+        height={12}
+        width={index === lines - 1 ? '75%' : '100%'}
+      />
+    ))}
+  </div>
+);

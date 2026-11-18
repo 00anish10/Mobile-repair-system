@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { RepairProvider, useRepair } from './context/RepairContext';
+import { RepairProvider, useRepair, type BookingPrefill } from './context/RepairContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { DeviceSelector } from './components/DeviceSelector';
@@ -19,96 +20,223 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { Footer } from './components/Footer';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
+import { SupportPage } from './pages/SupportPage';
 import { NotFound } from './pages/NotFound';
+import { LegalPage } from './pages/LegalPage';
 import { ToastProvider } from './hooks/useToast';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: ('customer' | 'admin')[] }> = ({ 
-  children, 
-  allowedRoles = ['customer', 'admin'] 
-}) => {
+const dashboardPathForRole = (role: 'customer' | 'admin' | null) =>
+  role === 'admin' ? '/admin' : '/dashboard';
+
+const ProtectedRoute: React.FC<{
+  children: React.ReactNode;
+  allowedRoles?: ('customer' | 'admin')[];
+}> = ({ children, allowedRoles = ['customer', 'admin'] }) => {
   const { isAuthenticated, userRole } = useAuth();
-  
+  const location = useLocation();
+
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname)}`} replace />;
   }
-  
-  if (allowedRoles.length > 0 && userRole && !allowedRoles.includes(userRole)) {
-    return <Navigate to="/" replace />;
+
+  if (userRole && !allowedRoles.includes(userRole)) {
+    return <Navigate to={dashboardPathForRole(userRole)} replace />;
   }
-  
+
   return <>{children}</>;
 };
 
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated } = useAuth();
-  
+  const { isAuthenticated, userRole } = useAuth();
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={dashboardPathForRole(userRole)} replace />;
   }
-  
   return <>{children}</>;
 };
 
-const MainContent: React.FC = () => {
-  const { activeView } = useRepair();
+const HomeView: React.FC = () => (
+  <>
+    <Hero />
+    <DeviceSelector />
+    <ServiceCategories />
+    <HowItWorks />
+    <PricingSection />
+    <WhyChooseUs />
+    <ServiceAreas />
+    <ReviewsSection />
+    <FAQSection />
+  </>
+);
 
-  // Scroll to top when view switches
+const ScrollManager: React.FC = () => {
+  const location = useLocation();
+
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [activeView]);
+    if (location.hash) {
+      const id = location.hash.replace('#', '');
+      // Wait a tick so the target route has rendered.
+      const timer = setTimeout(() => {
+        const element = document.getElementById(id);
+        if (element) element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return undefined;
+  }, [location.pathname, location.hash]);
 
-  return (
-    <div className="min-h-screen flex flex-col bg-slate-50 font-['Plus_Jakarta_Sans',sans-serif]">
-      <Navbar />
-      
-      <main className="flex-1">
-        {activeView === 'home' && (
-          <>
-            <Hero />
-            <DeviceSelector />
-            <ServiceCategories />
-            <HowItWorks />
-            <PricingSection />
-            <WhyChooseUs />
-            <ServiceAreas />
-            <ReviewsSection />
-            <FAQSection />
-          </>
-        )}
-
-        {activeView === 'track' && <TechnicianTracking />}
-
-        {activeView === 'customer_dashboard' && (
-          <ProtectedRoute allowedRoles={['customer']}>
-            <CustomerDashboard />
-          </ProtectedRoute>
-        )}
-
-        {activeView === 'admin_dashboard' && (
-          <ProtectedRoute allowedRoles={['admin']}>
-            <AdminDashboard />
-          </ProtectedRoute>
-        )}
-      </main>
-
-      {/* Global Booking Modal */}
-      <BookingModal />
-
-      <Footer />
-    </div>
-  );
+  return null;
 };
 
-const AppWithAuth: React.FC = () => {
+const Shell: React.FC<{ children: React.ReactNode; hideNavbar?: boolean }> = ({
+  children,
+  hideNavbar = false,
+}) => (
+  <div className="min-h-screen flex flex-col bg-slate-50 font-['Plus_Jakarta_Sans',sans-serif]">
+    <ScrollManager />
+    {!hideNavbar && <Navbar />}
+    <main className="flex-1">{children}</main>
+    <BookingModal />
+    <Footer />
+  </div>
+);
+
+const BookingIntentHandler: React.FC = () => {
+  const { isAuthenticated } = useAuth();
+  const { openBookingModal, isBookingModalOpen } = useRepair();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const bookRequested = searchParams.get('book') === '1';
+
+  useEffect(() => {
+    if (!bookRequested || !isAuthenticated) return;
+
+    let pendingPrefill: BookingPrefill | undefined;
+    const savedPrefill = sessionStorage.getItem('moon_booking_prefill');
+    if (savedPrefill) {
+      try {
+        pendingPrefill = JSON.parse(savedPrefill) as BookingPrefill;
+      } catch {
+        pendingPrefill = undefined;
+      }
+    }
+
+    if (!isBookingModalOpen) openBookingModal(pendingPrefill);
+    sessionStorage.removeItem('moon_booking_prefill');
+    const next = new URLSearchParams(searchParams);
+    next.delete('book');
+    setSearchParams(next, { replace: true });
+  }, [
+    bookRequested,
+    isAuthenticated,
+    isBookingModalOpen,
+    openBookingModal,
+    searchParams,
+    setSearchParams,
+  ]);
+
+  return null;
+};
+
+const AppRoutes: React.FC = () => {
   const { user, userRole, isAuthenticated } = useAuth();
 
   return (
-    <RepairProvider 
-      userEmail={isAuthenticated ? user?.email : undefined} 
+    <RepairProvider
+      userEmail={isAuthenticated ? user?.email : undefined}
       userRole={userRole}
     >
-      <MainContent />
+      <BookingIntentHandler />
+      <Routes>
+        <Route
+          path="/login"
+          element={
+            <PublicRoute>
+              <LoginPage />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            <PublicRoute>
+              <RegisterPage />
+            </PublicRoute>
+          }
+        />
+
+        <Route
+          path="/"
+          element={
+            <Shell>
+              <HomeView />
+            </Shell>
+          }
+        />
+        <Route
+          path="/track"
+          element={
+            <ProtectedRoute>
+              <Shell>
+                <TechnicianTracking />
+              </Shell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <Shell>
+              <ProtectedRoute allowedRoles={['customer']}>
+                <CustomerDashboard />
+              </ProtectedRoute>
+            </Shell>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <Shell hideNavbar>
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminDashboard />
+              </ProtectedRoute>
+            </Shell>
+          }
+        />
+        <Route
+          path="/support"
+          element={
+            <Shell>
+              <SupportPage />
+            </Shell>
+          }
+        />
+        <Route
+          path="/terms"
+          element={
+            <Shell>
+              <LegalPage kind="terms" />
+            </Shell>
+          }
+        />
+        <Route
+          path="/privacy"
+          element={
+            <Shell>
+              <LegalPage kind="privacy" />
+            </Shell>
+          }
+        />
+
+        <Route
+          path="*"
+          element={
+            <Shell>
+              <NotFound />
+            </Shell>
+          }
+        />
+      </Routes>
     </RepairProvider>
   );
 };
@@ -116,37 +244,15 @@ const AppWithAuth: React.FC = () => {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <ToastProvider>
-          <ErrorBoundary>
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/login" element={
-                <PublicRoute>
-                  <LoginPage />
-                </PublicRoute>
-              } />
-              <Route path="/register" element={
-                <PublicRoute>
-                  <RegisterPage />
-                </PublicRoute>
-              } />
-              
-              {/* Protected App Routes */}
-              <Route path="/" element={<AppWithAuth />}>
-                <Route index element={<Navigate to="/home" replace />} />
-                <Route path="home" element={<Navigate to="/" replace />} />
-                <Route path="track" element={<Navigate to="/track" replace />} />
-                <Route path="dashboard" element={<Navigate to="/dashboard" replace />} />
-                <Route path="admin" element={<Navigate to="/admin" replace />} />
-              </Route>
-              
-              {/* Catch-all 404 */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </ErrorBoundary>
-        </ToastProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <ErrorBoundary>
+              <AppRoutes />
+            </ErrorBoundary>
+          </ToastProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }

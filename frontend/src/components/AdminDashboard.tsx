@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Calendar,
@@ -9,26 +10,93 @@ import {
   Search,
   BarChart3,
   X,
+  Plus,
+  PencilLine,
+  ClipboardList,
+  Trash2,
+  PhoneCall,
+  LogOut,
 } from 'lucide-react';
 import { useRepair } from '../context/RepairContext';
-import type { BookingStatus } from '../types';
-import { SERVICE_CATEGORIES } from '../data/mockData';
+import { useAuth } from '../context/AuthContext';
+import type { BookingStatus, ServiceCategory, Technician } from '../types';
+import { useToast } from '../hooks/useToast';
+import { TechnicianModal } from './admin/TechnicianModal';
+import { ServiceModal } from './admin/ServiceModal';
 
 export const AdminDashboard: React.FC = () => {
   const {
     bookings,
     technicians,
+    services,
     updateBookingStatus,
     assignTechnician,
     cancelBooking,
+    deleteTechnician,
+    deleteService,
     setActiveTrackingId,
     setActiveView,
+    setCurrentRole,
   } = useRepair();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'bookings' | 'technicians' | 'services' | 'customers' | 'reports'>('overview');
   const [selectedBookingForModal, setSelectedBookingForModal] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [technicianModalOpen, setTechnicianModalOpen] = useState(false);
+  const [editingTechnician, setEditingTechnician] = useState<Technician | null>(null);
+  const [serviceModalOpen, setServiceModalOpen] = useState(false);
+  const [editingService, setEditingService] = useState<ServiceCategory | null>(null);
+  const { info, success, error: toastError } = useToast();
+  const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
+
+  const handleAdminLogout = () => {
+    logout();
+    setCurrentRole('customer');
+    navigate('/');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteTechnician = async (tech: Technician) => {
+    const key = `technician:${tech.id}`;
+    if (confirmDeleteKey !== key) {
+      setConfirmDeleteKey(key);
+      return;
+    }
+    setDeletingKey(key);
+    try {
+      await deleteTechnician(tech.id);
+      success('Technician removed', { description: `${tech.name} was deleted from the fleet.` });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not delete the technician.';
+      toastError('Delete failed', { description: message });
+    } finally {
+      setDeletingKey(null);
+      setConfirmDeleteKey(null);
+    }
+  };
+
+  const handleDeleteService = async (service: ServiceCategory) => {
+    const key = `service:${service.id}`;
+    if (confirmDeleteKey !== key) {
+      setConfirmDeleteKey(key);
+      return;
+    }
+    setDeletingKey(key);
+    try {
+      await deleteService(service.id);
+      success('Service removed', { description: `${service.title} was deleted.` });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not delete the service.';
+      toastError('Delete failed', { description: message });
+    } finally {
+      setDeletingKey(null);
+      setConfirmDeleteKey(null);
+    }
+  };
 
   // Computed metrics
   const totalBookings = bookings.length;
@@ -36,6 +104,7 @@ export const AdminDashboard: React.FC = () => {
   const completedRepairs = bookings.filter((b) => b.status === 'completed').length;
   const totalRevenueRs = bookings.reduce((sum, b) => (b.paymentStatus === 'paid' || b.status === 'completed' ? sum + b.estimatedCostRs : sum), 0);
   const activeTechsCount = technicians.filter((t) => t.status !== 'offline').length;
+  const completionRate = totalBookings > 0 ? Math.round((completedRepairs / totalBookings) * 100) : 0;
 
   // Filtered bookings
   const filteredBookings = bookings.filter((b) => {
@@ -50,6 +119,74 @@ export const AdminDashboard: React.FC = () => {
   });
 
   const selectedBooking = bookings.find((b) => b.id === selectedBookingForModal);
+
+  const customers = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        name: string;
+        email: string;
+        phone: string;
+        city: string;
+        repairs: number;
+        spent: number;
+      }
+    >();
+
+    for (const booking of bookings) {
+      const key = booking.customerEmail.toLowerCase();
+      const existing = map.get(key);
+      const spent = booking.status === 'completed' ? booking.estimatedCostRs : 0;
+      if (existing) {
+        existing.repairs += 1;
+        existing.spent += spent;
+      } else {
+        map.set(key, {
+          name: booking.customerName,
+          email: booking.customerEmail,
+          phone: booking.customerPhone,
+          city: `${booking.city} (${booking.area})`,
+          repairs: 1,
+          spent,
+        });
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.repairs - a.repairs);
+  }, [bookings]);
+
+  const deviceStats = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const booking of bookings) {
+      const label = `${booking.brand} ${booking.model}`.trim();
+      counts.set(label, (counts.get(label) || 0) + 1);
+    }
+    const total = bookings.length;
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([device, count]) => ({
+        device,
+        count,
+        pct: total > 0 ? Math.round((count / total) * 100) : 0,
+      }));
+  }, [bookings]);
+
+  const issueStats = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const booking of bookings) {
+      counts.set(booking.problemTitle, (counts.get(booking.problemTitle) || 0) + 1);
+    }
+    const total = bookings.length;
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([issue, count]) => ({
+        issue,
+        count,
+        pct: total > 0 ? Math.round((count / total) * 100) : 0,
+      }));
+  }, [bookings]);
 
   // Status badge helper
   const renderStatusBadge = (status: BookingStatus) => {
@@ -74,40 +211,51 @@ export const AdminDashboard: React.FC = () => {
   };
 
   return (
-    <div className="bg-slate-100 min-h-screen py-8 border-b border-slate-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-        {/* Admin Header Bar */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-amber-700 bg-amber-100 px-2.5 py-0.5 rounded-md">
-                Admin Control Room
-              </span>
-              <span className="text-xs text-slate-400">• Operations & Fleet Dispatch</span>
-            </div>
-            <h1 className="text-2xl font-extrabold text-slate-900 mt-1">
-              Moon Mobile Command Center
-            </h1>
+    <div className="bg-slate-100 min-h-screen border-b border-slate-200">
+      <div className="sticky top-0 z-40 bg-slate-900 text-slate-300 border-b border-slate-800 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="inline-flex items-center gap-1.5 bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Live On-Demand
+            </span>
+            <span className="hidden md:inline truncate text-xs text-slate-300">
+              60-minute express mobile phone &amp; device repair dispatch active across Sydney,
+              Melbourne, Brisbane &amp; more
+            </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <a
+              href="tel:+61400123456"
+              className="inline-flex items-center gap-1.5 text-slate-200 hover:text-white transition-colors text-xs font-semibold"
+            >
+              <PhoneCall className="w-3.5 h-3.5 text-blue-400" />
+              <span className="hidden sm:inline">+61 400 123 456</span>
+            </a>
+            <div className="hidden sm:block h-4 w-px bg-slate-700" />
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white text-xs font-black">
+                {user?.name?.charAt(0) || 'A'}
+              </div>
+              <div className="hidden sm:block text-left leading-tight">
+                <p className="text-xs font-bold text-white">{user?.name || 'Admin'}</p>
+                <p className="text-[10px] text-slate-400 capitalize">{user?.role || 'admin'}</p>
+              </div>
+            </div>
             <button
               type="button"
-              onClick={() => setActiveView('home')}
-              className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-colors cursor-pointer"
+              onClick={handleAdminLogout}
+              className="px-2.5 py-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-medium transition-colors flex items-center gap-1.5"
             >
-              Exit to Customer View
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('bookings')}
-              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors cursor-pointer shadow-sm"
-            >
-              Dispatch Center
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Logout</span>
             </button>
           </div>
         </div>
+      </div>
 
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* Admin Navigation Pills */}
         <div className="flex flex-wrap items-center gap-2 bg-white p-2 rounded-2xl border border-slate-200 shadow-xs">
           {[
@@ -156,7 +304,7 @@ export const AdminDashboard: React.FC = () => {
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Bookings</span>
                 <div className="text-2xl font-black text-slate-900 mt-1">{totalBookings}</div>
                 <div className="flex items-center gap-1 text-[11px] text-emerald-600 font-bold mt-1">
-                  <TrendingUp className="w-3 h-3" /> +14% this week
+                  <TrendingUp className="w-3 h-3" /> {completionRate}% completion rate
                 </div>
               </div>
 
@@ -175,7 +323,7 @@ export const AdminDashboard: React.FC = () => {
               <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
                 <span className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">Total Revenue</span>
                 <div className="text-xl font-black text-slate-900 mt-1">
-                  Rs. {totalRevenueRs.toLocaleString()}
+                  ${totalRevenueRs.toLocaleString()}
                 </div>
                 <div className="text-[11px] text-emerald-600 font-bold mt-1">Paid / Completed</div>
               </div>
@@ -188,8 +336,8 @@ export const AdminDashboard: React.FC = () => {
 
               <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
                 <span className="text-[11px] font-bold text-purple-600 uppercase tracking-wider">Customers</span>
-                <div className="text-2xl font-black text-purple-600 mt-1">428</div>
-                <div className="text-[11px] text-slate-400 mt-1">Registered accounts</div>
+                <div className="text-2xl font-black text-purple-600 mt-1">{customers.length}</div>
+                <div className="text-[11px] text-slate-400 mt-1">From booking history</div>
               </div>
             </div>
 
@@ -232,7 +380,7 @@ export const AdminDashboard: React.FC = () => {
                         <td className="p-3 text-slate-600">{b.area}, {b.city}</td>
                         <td className="p-3 text-slate-500">{b.scheduledDate}</td>
                         <td className="p-3">{renderStatusBadge(b.status)}</td>
-                        <td className="p-3 font-bold text-slate-900">Rs. {b.estimatedCostRs.toLocaleString()}</td>
+                        <td className="p-3 font-bold text-slate-900">${b.estimatedCostRs.toLocaleString()}</td>
                         <td className="p-3">
                           <button
                             type="button"
@@ -244,6 +392,17 @@ export const AdminDashboard: React.FC = () => {
                         </td>
                       </tr>
                     ))}
+                    {bookings.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="px-4 py-10 text-center">
+                          <ClipboardList className="mx-auto h-7 w-7 text-slate-300" />
+                          <p className="mt-2 font-bold text-slate-700">No dispatches yet</p>
+                          <p className="text-[11px] text-slate-400">
+                            Customer bookings will show up here in real time.
+                          </p>
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -276,6 +435,7 @@ export const AdminDashboard: React.FC = () => {
                   <option value="confirmed">Confirmed</option>
                   <option value="technician_assigned">Tech Assigned</option>
                   <option value="technician_en_route">En Route</option>
+                  <option value="technician_arrived">Tech Arrived</option>
                   <option value="in_progress">In Progress</option>
                   <option value="completed">Completed</option>
                   <option value="cancelled">Cancelled</option>
@@ -333,7 +493,7 @@ export const AdminDashboard: React.FC = () => {
                           )}
                         </td>
                         <td className="p-3">{renderStatusBadge(b.status)}</td>
-                        <td className="p-3 font-bold text-slate-900">Rs. {b.estimatedCostRs.toLocaleString()}</td>
+                        <td className="p-3 font-bold text-slate-900">${b.estimatedCostRs.toLocaleString()}</td>
                         <td className="p-3 text-right">
                           <button
                             type="button"
@@ -346,6 +506,19 @@ export const AdminDashboard: React.FC = () => {
                       </tr>
                     );
                   })}
+                  {filteredBookings.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="px-4 py-12 text-center">
+                        <ClipboardList className="mx-auto h-8 w-8 text-slate-300" />
+                        <p className="mt-2 font-bold text-slate-700">No bookings found</p>
+                        <p className="text-[11px] text-slate-400">
+                          {bookings.length === 0
+                            ? 'New customer bookings will appear here.'
+                            : 'Try a different search term or status filter.'}
+                        </p>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -362,10 +535,13 @@ export const AdminDashboard: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={() => alert('New Technician modal opens here!')}
-                className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors"
+                onClick={() => {
+                  setEditingTechnician(null);
+                  setTechnicianModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors"
               >
-                + Add Technician
+                <Plus className="h-4 w-4" /> Add Technician
               </button>
             </div>
 
@@ -412,18 +588,49 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                    <span className="text-slate-400">{tech.phone}</span>
-                    <button
-                      type="button"
-                      onClick={() => alert(`Editing profile for ${tech.name}`)}
-                      className="text-blue-600 font-bold hover:underline"
-                    >
-                      Edit
-                    </button>
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate text-slate-400">{tech.phone}</span>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteTechnician(tech)}
+                        disabled={deletingKey === `technician:${tech.id}`}
+                        className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-bold transition disabled:cursor-wait disabled:opacity-60 ${
+                          confirmDeleteKey === `technician:${tech.id}`
+                            ? 'border-rose-200 bg-rose-600 text-white hover:bg-rose-700'
+                            : 'border-slate-200 bg-white text-rose-600 hover:border-rose-200 hover:bg-rose-50'
+                        }`}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        {deletingKey === `technician:${tech.id}`
+                          ? 'Deleting'
+                          : confirmDeleteKey === `technician:${tech.id}`
+                          ? 'Confirm'
+                          : 'Delete'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingTechnician(tech);
+                          setTechnicianModalOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                      >
+                        <PencilLine className="h-3 w-3" /> Edit
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
+              {technicians.length === 0 && (
+                <div className="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+                  <Wrench className="mx-auto h-8 w-8 text-slate-300" />
+                  <p className="mt-2 font-bold text-slate-700">No technicians yet</p>
+                  <p className="text-[11px] text-slate-400">
+                    Add your first technician to start dispatching jobs.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -438,10 +645,13 @@ export const AdminDashboard: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={() => alert('Add Service modal')}
-                className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl"
+                onClick={() => {
+                  setEditingService(null);
+                  setServiceModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors"
               >
-                + New Service
+                <Plus className="h-4 w-4" /> New Service
               </button>
             </div>
 
@@ -457,23 +667,63 @@ export const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {SERVICE_CATEGORIES.map((s) => (
+                  {services.map((s) => (
                     <tr key={s.id} className="hover:bg-slate-50">
-                      <td className="p-3 font-bold text-slate-900">{s.title}</td>
+                      <td className="p-3">
+                        <span className="font-bold text-slate-900">{s.title}</span>
+                        {s.isActive === false && (
+                          <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+                            Hidden
+                          </span>
+                        )}
+                      </td>
                       <td className="p-3 text-slate-500 max-w-xs truncate">{s.description}</td>
-                      <td className="p-3 font-bold text-blue-700">From Rs. {s.startingPriceRs.toLocaleString()}</td>
+                      <td className="p-3 font-bold text-blue-700">From ${s.startingPriceRs.toLocaleString()}</td>
                       <td className="p-3 text-emerald-700 font-semibold">{s.warrantyText}</td>
                       <td className="p-3">
-                        <button
-                          type="button"
-                          onClick={() => alert(`Edit service: ${s.title}`)}
-                          className="text-blue-600 font-bold hover:underline"
-                        >
-                          Edit
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteService(s)}
+                            disabled={deletingKey === `service:${s.id}`}
+                            className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-bold transition disabled:cursor-wait disabled:opacity-60 ${
+                              confirmDeleteKey === `service:${s.id}`
+                                ? 'border-rose-200 bg-rose-600 text-white hover:bg-rose-700'
+                                : 'border-slate-200 bg-white text-rose-600 hover:border-rose-200 hover:bg-rose-50'
+                            }`}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            {deletingKey === `service:${s.id}`
+                              ? 'Deleting'
+                              : confirmDeleteKey === `service:${s.id}`
+                              ? 'Confirm'
+                              : 'Delete'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingService(s);
+                              setServiceModalOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                          >
+                            <PencilLine className="h-3 w-3" /> Edit
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
+                  {services.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-12 text-center">
+                        <DollarSign className="mx-auto h-8 w-8 text-slate-300" />
+                        <p className="mt-2 font-bold text-slate-700">No services in the catalog</p>
+                        <p className="text-[11px] text-slate-400">
+                          Add a service so customers can book it.
+                        </p>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -497,12 +747,8 @@ export const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {[
-                    { name: 'Anish Shrestha', email: 'anishshrestha2007@gmail.com', phone: '+977 9841556677', city: 'Lalitpur (Sanepa)', repairs: 2, spent: 12398 },
-                    { name: 'Pooja Karki', email: 'pooja.karki@gmail.com', phone: '+977 9801443322', city: 'Kathmandu (New Baneshwor)', repairs: 1, spent: 3899 },
-                    { name: 'Suman Gurung', email: 'suman.g@outlook.com', phone: '+977 9811223344', city: 'Pokhara (Lakeside)', repairs: 1, spent: 4999 },
-                  ].map((cust, i) => (
-                    <tr key={i} className="hover:bg-slate-50">
+                  {customers.map((cust) => (
+                    <tr key={cust.email} className="hover:bg-slate-50">
                       <td className="p-3">
                         <div className="font-bold text-slate-900">{cust.name}</div>
                         <div className="text-slate-400 text-[11px]">{cust.email}</div>
@@ -510,11 +756,11 @@ export const AdminDashboard: React.FC = () => {
                       <td className="p-3 font-semibold text-slate-800">{cust.phone}</td>
                       <td className="p-3 text-slate-600">{cust.city}</td>
                       <td className="p-3 font-bold text-slate-900">{cust.repairs}</td>
-                      <td className="p-3 font-bold text-emerald-700">Rs. {cust.spent.toLocaleString()}</td>
+                      <td className="p-3 font-bold text-emerald-700">${cust.spent.toLocaleString()}</td>
                       <td className="p-3">
                         <button
                           type="button"
-                          onClick={() => alert(`View details for ${cust.name}`)}
+                          onClick={() => info(cust.name, { description: `${cust.email} • ${cust.phone} • ${cust.repairs} repair(s)` })}
                           className="text-blue-600 font-bold hover:underline"
                         >
                           View Profile
@@ -522,6 +768,17 @@ export const AdminDashboard: React.FC = () => {
                       </td>
                     </tr>
                   ))}
+                  {customers.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-12 text-center">
+                        <Users className="mx-auto h-8 w-8 text-slate-300" />
+                        <p className="mt-2 font-bold text-slate-700">No customers yet</p>
+                        <p className="text-[11px] text-slate-400">
+                          Customers appear automatically after their first booking.
+                        </p>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -536,23 +793,24 @@ export const AdminDashboard: React.FC = () => {
               <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-3">
                 <h4 className="font-bold text-sm text-slate-900">Most Requested Devices for Home Repair</h4>
                 <div className="space-y-2 text-xs">
-                  {[
-                    { device: 'iPhone 15 & 15 Pro Series', pct: 38, count: '142 requests' },
-                    { device: 'Samsung Galaxy S23 & S24 Series', pct: 28, count: '105 requests' },
-                    { device: 'MacBook Air & Pro (M1/M2/M3)', pct: 18, count: '68 requests' },
-                    { device: 'Xiaomi / Redmi Note Series', pct: 11, count: '41 requests' },
-                    { device: 'iPads & Galaxy Tabs', pct: 5, count: '19 requests' },
-                  ].map((item) => (
+                  {deviceStats.map((item) => (
                     <div key={item.device} className="space-y-1">
                       <div className="flex justify-between font-semibold">
                         <span className="text-slate-800">{item.device}</span>
-                        <span className="text-slate-500">{item.count} ({item.pct}%)</span>
+                        <span className="text-slate-500">
+                          {item.count} request{item.count === 1 ? '' : 's'} ({item.pct}%)
+                        </span>
                       </div>
                       <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                         <div className="bg-blue-600 h-full rounded-full" style={{ width: `${item.pct}%` }}></div>
                       </div>
                     </div>
                   ))}
+                  {deviceStats.length === 0 && (
+                    <p className="rounded-xl border border-dashed border-slate-300 px-3 py-6 text-center text-slate-400">
+                      Device trends appear after the first booking.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -560,23 +818,24 @@ export const AdminDashboard: React.FC = () => {
               <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-3">
                 <h4 className="font-bold text-sm text-slate-900">Most Common Repair Issues</h4>
                 <div className="space-y-2 text-xs">
-                  {[
-                    { issue: 'Cracked Screen / OLED Replacement', pct: 45 },
-                    { issue: 'Battery Degradation / Rapid Drain', pct: 25 },
-                    { issue: 'Charging Port & MagSafe Burn', pct: 15 },
-                    { issue: 'Water & Beverage Liquid Damage', pct: 10 },
-                    { issue: 'Boot Loop & Software Issues', pct: 5 },
-                  ].map((item) => (
+                  {issueStats.map((item) => (
                     <div key={item.issue} className="space-y-1">
                       <div className="flex justify-between font-semibold">
                         <span className="text-slate-800">{item.issue}</span>
-                        <span className="text-slate-500">{item.pct}%</span>
+                        <span className="text-slate-500">
+                          {item.count} request{item.count === 1 ? '' : 's'} ({item.pct}%)
+                        </span>
                       </div>
                       <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                         <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${item.pct}%` }}></div>
                       </div>
                     </div>
                   ))}
+                  {issueStats.length === 0 && (
+                    <p className="rounded-xl border border-dashed border-slate-300 px-3 py-6 text-center text-slate-400">
+                      Repair issue trends appear after the first booking.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -656,7 +915,7 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Amount:</span>
-                    <span className="font-extrabold text-blue-700">Rs. {selectedBooking.estimatedCostRs.toLocaleString()}</span>
+                    <span className="font-extrabold text-blue-700">${selectedBooking.estimatedCostRs.toLocaleString()}</span>
                   </div>
                 </div>
 
@@ -689,6 +948,24 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
         )}
+
+        <TechnicianModal
+          open={technicianModalOpen}
+          technician={editingTechnician}
+          onClose={() => {
+            setTechnicianModalOpen(false);
+            setEditingTechnician(null);
+          }}
+        />
+
+        <ServiceModal
+          open={serviceModalOpen}
+          service={editingService}
+          onClose={() => {
+            setServiceModalOpen(false);
+            setEditingService(null);
+          }}
+        />
       </div>
     </div>
   );

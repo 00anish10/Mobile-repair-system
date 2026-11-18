@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { User, Lock, Eye, EyeOff, Mail, Phone, Truck, ShieldCheck, Sparkles, UserPlus, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useRepair } from '../context/RepairContext';
@@ -10,9 +10,11 @@ export const RegisterPage: React.FC = () => {
   const { register } = useAuth();
   const { setCurrentRole } = useRepair();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get('redirect');
+  const bookIntent = searchParams.get('book') === '1';
   const { success: showSuccess, error: showError } = useToast();
 
-  const [role, setRole] = useState<'customer' | 'admin'>('customer');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -55,6 +57,21 @@ export const RegisterPage: React.FC = () => {
     return null;
   };
 
+  const postRegisterRedirect = () => {
+    const base =
+      redirectTo && /^\/(?!\/)/.test(redirectTo)
+        ? redirectTo
+        : bookIntent
+        ? '/'
+        : '/dashboard';
+
+    if (!bookIntent) return base;
+
+    const url = new URL(base, window.location.origin);
+    url.searchParams.set('book', '1');
+    return `${url.pathname}${url.search}${url.hash}`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -67,17 +84,12 @@ export const RegisterPage: React.FC = () => {
     setLoading(true);
 
     try {
-      const result = await register({ name, email, phone, password, role });
+      const result = await register({ name, email, phone, password, role: 'customer' });
       if (result) {
         showSuccess('Account created successfully!', { description: 'Redirecting to your dashboard...' });
         setTimeout(() => {
-          if (role === 'admin') {
-            setCurrentRole('admin');
-            navigate('/admin');
-          } else {
-            setCurrentRole('customer');
-            navigate('/dashboard');
-          }
+          setCurrentRole('customer');
+          navigate(postRegisterRedirect());
         }, 1000);
       } else {
         showError('Registration failed', { description: 'Email already registered.' });
@@ -118,38 +130,10 @@ export const RegisterPage: React.FC = () => {
           <p className="mt-2 text-slate-600">Book faster, track repairs, manage warranties</p>
         </div>
 
-        {/* Role Selector */}
-        <div className="mb-6">
-          <div className="flex gap-2 bg-white rounded-xl p-1 shadow-sm border border-slate-100" role="tablist">
-            <button
-              role="tab"
-              aria-selected={role === 'customer'}
-              onClick={() => setRole('customer')}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-bold transition-all ${
-                role === 'customer'
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <User className="w-5 h-5" />
-              <span>Customer</span>
-            </button>
-            <button
-              role="tab"
-              aria-selected={role === 'admin'}
-              onClick={() => setRole('admin')}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-bold transition-all ${
-                role === 'admin'
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <ShieldCheck className="w-5 h-5" />
-              <span>Admin</span>
-            </button>
-          </div>
-          <p className="text-xs text-slate-500 text-center mt-2">
-            {role === 'customer' ? 'Track repairs, view warranty, book services' : 'Manage bookings, technicians, fleet & analytics'}
+        <div className="mb-6 rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-center">
+          <p className="text-xs font-semibold text-blue-800">
+            Customer accounts are created instantly. Admin access is invite-only and managed by
+            the operations team.
           </p>
         </div>
 
@@ -189,7 +173,7 @@ export const RegisterPage: React.FC = () => {
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+977 9XX XXX XXX"
+                  placeholder="+61 4XX XXX XXX"
                   required
                   autoComplete="tel"
                   className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-base font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
@@ -346,7 +330,19 @@ export const RegisterPage: React.FC = () => {
           <div className="mt-6 text-center">
             <p className="text-sm text-slate-600">
               Already have an account?{' '}
-              <Link to="/login" className="text-blue-600 hover:text-blue-700 font-bold transition-colors">
+              <Link
+                to={
+                  bookIntent
+                    ? `/login?${
+                        new URLSearchParams({
+                          ...(redirectTo ? { redirect: redirectTo } : {}),
+                          book: '1',
+                        }).toString()
+                      }`
+                    : '/login'
+                }
+                className="text-blue-600 hover:text-blue-700 font-bold transition-colors"
+              >
                 Sign In
               </Link>
             </p>

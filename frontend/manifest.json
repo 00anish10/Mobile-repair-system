@@ -1,0 +1,46 @@
+{
+  "name": "Moon Mobile Repair",
+  "short_name": "Moon Repair",
+  "description": "Express Mobile & Tech Repair - Fast, On-Demand Device Repair Across Australia",
+  "theme_color": "#0284c7",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": ".",
+  "display_override": "window-controls-overlay",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Book Repair",
+      "short_name": "Book",
+      "description": "Schedule a mobile repair service",
+      "url": "/",
+      "icons": [{ "src": "pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Track Repair",
+      "short_name": "Track",
+      "description": "Check your repair status",
+      "url": "/repairs",
+      "icons": [{ "src": "pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

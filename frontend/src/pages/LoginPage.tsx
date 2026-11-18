@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { User, Lock, Eye, EyeOff, Mail, Truck, ShieldCheck, Sparkles } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Lock, Eye, EyeOff, Mail, Truck, ShieldCheck, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useRepair } from '../context/RepairContext';
 import { MoonLogo } from '../components/MoonLogo';
@@ -10,68 +10,59 @@ export const LoginPage: React.FC = () => {
   const { isAuthenticated, login } = useAuth();
   const { setCurrentRole } = useRepair();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get('redirect');
+  const bookIntent = searchParams.get('book') === '1';
   const { success: showSuccess, error: showError } = useToast();
 
-  const [role, setRole] = useState<'customer' | 'admin'>('customer');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const customerRedirect = () => {
+    const base =
+      redirectTo && /^\/(?!\/)/.test(redirectTo)
+        ? redirectTo
+        : bookIntent
+        ? '/'
+        : '/dashboard';
+
+    if (!bookIntent) return base;
+
+    const url = new URL(base, window.location.origin);
+    url.searchParams.set('book', '1');
+    return `${url.pathname}${url.search}${url.hash}`;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const result = await login(email, password, role);
+      const result = await login(email, password);
       if (result) {
-        showSuccess('Welcome back!', { description: 'Redirecting to your dashboard...' });
+        showSuccess('Welcome back!', { description: 'Redirecting to your account...' });
         setTimeout(() => {
-          if (role === 'admin') {
-            setCurrentRole('admin');
-            navigate('/admin');
+          setCurrentRole(result.role);
+          if (result.role === 'admin') {
+            const canReturnToRequestedPage =
+              redirectTo &&
+              /^\/(?!\/)/.test(redirectTo) &&
+              (redirectTo.startsWith('/admin') || redirectTo === '/track');
+            navigate(canReturnToRequestedPage ? redirectTo : '/admin');
           } else {
-            setCurrentRole('customer');
-            navigate('/dashboard');
+            navigate(customerRedirect());
           }
         }, 1000);
       } else {
-        showError('Login failed', { description: 'Invalid email or password for this role.' });
+        showError('Login failed', { description: 'Invalid email or password.' });
       }
     } catch {
       showError('Something went wrong', { description: 'Please try again.' });
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleDemoLogin = async (demoRole: 'customer' | 'admin') => {
-    setRole(demoRole);
-    setEmail(demoRole === 'customer' ? 'anishshrestha2007@gmail.com' : 'admin@moonmobilerepair.com');
-    setPassword(demoRole === 'customer' ? 'demo123' : 'admin123');
-    setLoading(true);
-    
-    const result = await login(
-      demoRole === 'customer' ? 'anishshrestha2007@gmail.com' : 'admin@moonmobilerepair.com',
-      demoRole === 'customer' ? 'demo123' : 'admin123',
-      demoRole
-    );
-    
-    if (result) {
-      showSuccess('Demo login successful!', { description: 'Redirecting...' });
-      setTimeout(() => {
-        if (demoRole === 'admin') {
-          setCurrentRole('admin');
-          navigate('/admin');
-        } else {
-          setCurrentRole('customer');
-          navigate('/dashboard');
-        }
-      }, 800);
-    } else {
-      showError('Demo login failed', { description: 'Please try again.' });
-    }
-    setLoading(false);
   };
 
   if (isAuthenticated) {
@@ -87,42 +78,7 @@ export const LoginPage: React.FC = () => {
             <MoonLogo size="lg" subtitle="Express Mobile & Tech Repair" />
           </Link>
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Welcome Back</h1>
-          <p className="mt-2 text-slate-600">Sign in to access your repair dashboard</p>
-        </div>
-
-        {/* Role Selector */}
-        <div className="mb-6">
-          <div className="flex gap-2 bg-white rounded-xl p-1 shadow-sm border border-slate-100" role="tablist">
-            <button
-              role="tab"
-              aria-selected={role === 'customer'}
-              onClick={() => setRole('customer')}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-bold transition-all ${
-                role === 'customer'
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <User className="w-5 h-5" />
-              <span>Customer</span>
-            </button>
-            <button
-              role="tab"
-              aria-selected={role === 'admin'}
-              onClick={() => setRole('admin')}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-bold transition-all ${
-                role === 'admin'
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <ShieldCheck className="w-5 h-5" />
-              <span>Admin</span>
-            </button>
-          </div>
-          <p className="text-xs text-slate-500 text-center mt-2">
-            {role === 'customer' ? 'Track repairs, view warranty, book services' : 'Manage bookings, technicians, fleet & analytics'}
-          </p>
+          <p className="mt-2 text-slate-600">Sign in to access your account</p>
         </div>
 
         {/* Login Form */}
@@ -201,36 +157,23 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* Demo Login Buttons */}
-          <div className="mt-6 pt-6 border-t border-slate-100 space-y-3">
-            <p className="text-xs text-slate-500 text-center">Or try demo accounts:</p>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => handleDemoLogin('customer')}
-                disabled={loading}
-                className="px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                <User className="w-4 h-4" />
-                <span>Demo Customer</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDemoLogin('admin')}
-                disabled={loading}
-                className="px-4 py-3 rounded-xl bg-indigo-100 hover:bg-indigo-200 text-indigo-700 text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                <ShieldCheck className="w-4 h-4" />
-                <span>Demo Admin</span>
-              </button>
-            </div>
-          </div>
-
           {/* Register Link */}
           <div className="mt-6 text-center">
             <p className="text-sm text-slate-600">
               Don&apos;t have an account?{' '}
-              <Link to="/register" className="text-blue-600 hover:text-blue-700 font-bold transition-colors">
+              <Link
+                to={
+                  bookIntent
+                    ? `/register?${
+                        new URLSearchParams({
+                          ...(redirectTo ? { redirect: redirectTo } : {}),
+                          book: '1',
+                        }).toString()
+                      }`
+                    : '/register'
+                }
+                className="text-blue-600 hover:text-blue-700 font-bold transition-colors"
+              >
                 Create one
               </Link>
             </p>

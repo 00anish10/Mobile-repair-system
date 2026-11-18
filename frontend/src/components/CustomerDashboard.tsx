@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   User,
   Calendar,
@@ -7,11 +7,14 @@ import {
   ShieldCheck,
   Bell,
   Wrench,
+  Sparkles,
   CheckCircle2,
   ChevronRight,
   Plus,
 } from 'lucide-react';
 import { useRepair } from '../context/RepairContext';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../hooks/useToast';
 
 export const CustomerDashboard: React.FC = () => {
   const {
@@ -22,35 +25,45 @@ export const CustomerDashboard: React.FC = () => {
     userEmail,
     setUserEmail,
   } = useRepair();
+  const { user, updateProfile } = useAuth();
+  const { success, info } = useToast();
 
   const [activeTab, setActiveTab] = useState<
-    'bookings' | 'upcoming' | 'history' | 'warranties' | 'addresses' | 'profile' | 'notifications'
+    'bookings' | 'upcoming' | 'history' | 'warranties' | 'addresses' | 'profile' | 'notifications' | 'referrals'
   >('bookings');
 
   // Customer Profile state
-  const [name, setName] = useState('Anish Shrestha');
-  const [phone, setPhone] = useState('+977 9841556677');
-  const [email, setEmail] = useState(userEmail || 'anishshrestha2007@gmail.com');
+  const [name, setName] = useState(user?.name || 'Customer');
+  const [phone, setPhone] = useState(user?.phone || '');
+  const [email, setEmail] = useState(userEmail || user?.email || '');
   const [profileSaved, setProfileSaved] = useState(false);
+  const [referralsEarned] = useState(3);
+
+  useEffect(() => {
+    if (!user) return;
+    setName(user.name);
+    setPhone(user.phone);
+    setEmail(user.email);
+  }, [user]);
 
   // Saved addresses
   const [savedAddresses] = useState([
     {
       id: 'addr-1',
-      title: 'Home (Sanepa)',
-      address: 'House 42, Sanepa Heights, Ward 2',
-      area: 'Sanepa / Jhamsikhel',
-      city: 'Lalitpur',
-      landmark: 'Near British School Gate',
+      title: 'Home (Surry Hills)',
+      address: 'Unit 12, 88 Crown Street',
+      area: 'Surry Hills',
+      city: 'Sydney',
+      landmark: 'Near Crown Street Public School',
       isDefault: true,
     },
     {
       id: 'addr-2',
-      title: 'Workplace (Tech Hub)',
-      address: 'Floor 3, Trade Tower, Thapathali',
-      area: 'Thapathali',
-      city: 'Kathmandu',
-      landmark: 'Opposite Norvic Hospital',
+      title: 'Workplace (Melbourne CBD)',
+      address: 'Level 8, 120 Collins Street',
+      area: 'Melbourne CBD',
+      city: 'Melbourne',
+      landmark: 'Near Parliament Station',
       isDefault: false,
     },
   ]);
@@ -60,7 +73,7 @@ export const CustomerDashboard: React.FC = () => {
     {
       id: 'notif-1',
       title: 'Technician En Route',
-      message: 'Technician Bikram Shrestha is traveling to your Sanepa address. Estimated arrival: 18 mins.',
+      message: 'Technician Jack Thompson is travelling to your Surry Hills address. Estimated arrival: 18 mins.',
       time: '10 minutes ago',
       unread: true,
     },
@@ -93,9 +106,23 @@ export const CustomerDashboard: React.FC = () => {
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    setUserEmail(email);
+    if (name.trim().length < 2) return;
+    updateProfile({ name: name.trim(), phone: phone.trim() });
+    setUserEmail(email.trim());
     setProfileSaved(true);
+    success('Profile updated', { description: 'Your contact details have been saved.' });
     setTimeout(() => setProfileSaved(false), 3000);
+  };
+
+  const referralCode = `MOON2026${referralsEarned}`;
+
+  const handleCopyReferral = async () => {
+    try {
+      await navigator.clipboard.writeText(referralCode);
+      success('Referral code copied', { description: referralCode });
+    } catch {
+      success('Your referral code', { description: referralCode });
+    }
   };
 
   return (
@@ -146,6 +173,7 @@ export const CustomerDashboard: React.FC = () => {
               { id: 'addresses', label: 'Saved Addresses', icon: MapPin, badge: savedAddresses.length },
               { id: 'notifications', label: 'Notifications', icon: Bell, badge: 2 },
               { id: 'profile', label: 'Profile Settings', icon: User },
+              { id: 'referrals', label: 'Referral Program', icon: Sparkles, badge: referralsEarned > 0 ? referralsEarned : undefined },
             ].map((tab) => {
               const Icon = tab.icon;
               const isSelected = activeTab === tab.id;
@@ -153,7 +181,7 @@ export const CustomerDashboard: React.FC = () => {
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setActiveTab(tab.id as 'bookings' | 'upcoming' | 'history' | 'warranties' | 'addresses' | 'profile' | 'notifications')}
+                  onClick={() => setActiveTab(tab.id as typeof activeTab)}
                   className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
                     isSelected
                       ? 'bg-blue-50 text-blue-700 border border-blue-200'
@@ -240,7 +268,7 @@ export const CustomerDashboard: React.FC = () => {
 
                       <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100">
                         <span className="text-base font-extrabold text-slate-900">
-                          Rs. {b.estimatedCostRs.toLocaleString()}
+                          ${b.estimatedCostRs.toLocaleString()}
                         </span>
                         <button
                           type="button"
@@ -282,7 +310,7 @@ export const CustomerDashboard: React.FC = () => {
                         </p>
                       </div>
                       <span className="font-extrabold text-slate-900">
-                        Rs. {b.estimatedCostRs.toLocaleString()}
+                        ${b.estimatedCostRs.toLocaleString()}
                       </span>
                     </div>
                     <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
@@ -354,7 +382,7 @@ export const CustomerDashboard: React.FC = () => {
                   <h2 className="text-lg font-bold text-slate-900">Saved Doorstep Locations</h2>
                   <button
                     type="button"
-                    onClick={() => alert('New address modal opens here!')}
+                    onClick={() => info('Saved addresses', { description: 'Add or edit addresses during checkout in the booking flow.' })}
                     className="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs rounded-lg transition-colors"
                   >
                     + Add Address
@@ -447,9 +475,12 @@ export const CustomerDashboard: React.FC = () => {
                       id="profile-email"
                       type="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold text-slate-900"
+                      readOnly
+                      className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-500"
                     />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Email is used for invoices and warranty and cannot be changed here.
+                    </p>
                   </div>
 
                   <button
@@ -465,6 +496,72 @@ export const CustomerDashboard: React.FC = () => {
                     </p>
                   )}
                 </form>
+              </div>
+            )}
+
+            {/* TAB: REFERRALS */}
+            {activeTab === 'referrals' && (
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+                <h2 className="text-lg font-bold text-slate-900">Referral Program</h2>
+                <p className="text-slate-600 mb-6">
+                  Share your unique referral code with friends and family. When they book their first repair using your code, you both earn rewards!
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+                  <div>
+                    <div className="text-3xl sm:text-4xl font-black text-blue-600 mb-2">{referralCode}</div>
+                    <div className="text-sm text-slate-500">Your unique referral code</div>
+                  </div>
+                  <div>
+                    <div className="text-3xl sm:text-4xl font-black text-emerald-600 mb-2">{referralsEarned}</div>
+                    <div className="text-sm text-slate-500">Friends referred</div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <p className="text-slate-600">
+                    Share your code {referralCode} with anyone who needs mobile repair. Both you and your friend get $50 off their first repair!
+                  </p>
+
+                  <div>
+                    <textarea
+                      rows={2}
+                      placeholder="Message to share..."
+                      className="w-full pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-base font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    />
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={handleCopyReferral}
+                      className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-all cursor-pointer shadow-md shadow-blue-500/25 hover:shadow-xl">
+                      Copy Code
+                    </button>
+                    <button
+                      type="button"
+                      className="py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition-all cursor-pointer shadow-md shadow-emerald-500/25 hover:shadow-xl">
+                      Share
+                    </button>
+                  </div>
+
+                  <div>
+                    <h4 className="font-bold text-slate-800 mb-3">Your Rewards</h4>
+                    <div className="grid grid-cols-2 gap-2 text-center">
+                      <div>
+                        <div className="text-2xl font-bold text-blue-600">$50</div>
+                        <div className="text-xs text-slate-500">Per successful referral</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-emerald-600">${referralsEarned * 50}</div>
+                        <div className="text-xs text-slate-500">Total earnings</div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">
+                      Redeem earnings for discounts on future repairs.
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
           </div>

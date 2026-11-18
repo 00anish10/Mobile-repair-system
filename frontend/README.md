@@ -1,271 +1,210 @@
-# Moon Mobile Repair - Express Mobile & Tech Repair
+# Moon Mobile Repair
 
-A modern mobile repair service application built with React 19, Vite 6, and TailwindCSS v4. Book fast, on-demand device repairs with certified technicians serving Nepal.
+Moon Mobile Repair is a demo booking app for an on-demand phone and laptop repair
+service across Australia. Customers can pick a device, describe the problem, choose a
+service type and time slot, and create a booking. The project also includes a
+customer dashboard, an admin console, technician tracking, and a Fastify +
+PostgreSQL API. Prices and payments are in Australian dollars (AUD), with
+service coverage across every Australian state and territory.
 
-## 📱 Live Demo
+The frontend is React 19, Vite, TypeScript, and Tailwind CSS v4. The backend is
+Fastify, `pg`, and PostgreSQL.
 
-Visit your deployed application at the project URL.
+## Requirements
 
-## 🏗️ Project Structure
+- Node.js 20 or newer
+- PostgreSQL running locally (or somewhere reachable)
+- npm
 
-```
-moon-mobile-repair/
-├── frontend/          # React + Vite Client
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── src/
-│   │   ├── App.tsx          # Main app with React Router & protected routes
-│   │   ├── pages/           # Login, Register, Home, NotFound, Terms, Privacy
-│   │   ├── components/      # BookingModal (split into 7 components), Navbar, Hero, etc.
-│   │   ├── context/         # AuthContext, RepairContext, ThemeContext
-│   │   ├── hooks/           # useToast
-│   │   └── data/           # Nepal-localized mock data
-│   └── dist/               # Production build output
-│
-├── backend/            # Node.js Fastify + PostgreSQL API
-│   ├── package.json
-│   ├── src/index.ts        # API routes (users, technicians, bookings)
-│   └── .env               # DATABASE_URL configuration
-```
+## Getting started
 
-## ✨ Features
-
-### Customer Features
-- **Dedicated Login & Register Pages** `/login` and `/register` with role selection
-- **Fast 2-minute booking flow** - 7 step guided process
-- **Device Brand & Model Selection** - Apple, Samsung, Google Pixel, etc.
-- **Repair Issue Selection** - Screen replacement, battery water damage, software issues
-- **Service Type** - Home, Office, Pickup & Delivery, or Workshop
-- **Location Selection** - Kathmandu, Lalitpur, Bhaktapur, Pokhara, Chitwan & more
-- **Scheduling** - Choose date & time slots with express options
-- **Customer Details** - Name, phone, email & payment preference
-- **Booking Confirmation** - Unique booking ID with technician assignment
-- **Live Technician Tracking** - Track your repair status in real-time
-- **Dark Mode** - Persists in localStorage across sessions
-- **Responsive Design** - Works mobile and desktop
-
-### Technical Features
-- **React Router 7** with PublicRoute and ProtectedRoute guards
-- **Error Boundary** - Graceful error handling (not blank white screens)
-- **Toast Notifications** - sonner replaces all alert() calls
-- **Skeleton Loaders** - While content async loads
-- **TypeScript** - Strict typing across all components
-- **ESLint + Prettier** - Code quality and formatting
-- **Nepal Localization** - All cities, +977 phone format, Rs. currency
-- **Theme Context** - Light/dark mode with persistence
-
-### Backend API (Fastify + PostgreSQL)
-- **User Authentication** - Register & login endpoints
-- **Technician Management** - Get all technicians with specialties
-- **Booking CRUD** - Create, read, update booking status
-- **Service Areas** - Kathmandu Valley, Pokhara, Chitwan, Biratnagar, Butwal
-- **Device Catalog** - iPhone, Samsung, iPad, Google Pixel models
-- **Database** - PostgreSQL with proper schema & foreign keys
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Node.js 20+ or Bun
-- PostgreSQL database (moon_mobile_repair)
-
-### 1. Clone & Install
+Install dependencies from the repository root:
 
 ```bash
-# Frontend
-cd frontend
-npm install
-
-# Backend
-cd backend
-npm install
+cd frontend && npm install
+cd ../backend && npm install
 ```
 
-### 2. Environment Configuration
+### 1. Create the database
 
-**Frontend** (`frontend/.env` - optional, defaults included):
-```env
-# Vite will proxy /api → http://localhost:3001
-# No DATABASE_URL needed on frontend
+Create a database called `moon_mobile_repair`. You can do this in pgAdmin or
+from `psql`:
+
+```sql
+CREATE DATABASE moon_mobile_repair;
 ```
 
-**Backend** (`backend/.env`):
+The full pgAdmin walkthrough, including schema/seed instructions and verification
+queries, is in [`backend/DATABASE_SETUP.md`](../backend/DATABASE_SETUP.md).
+
+### 2. Configure the backend
+
+Create `backend/.env`. You can use either a connection string:
+
 ```env
-DATABASE_URL=postgresql://postgres@localhost:5432/moon_mobile_repair
+DATABASE_URL=postgresql://postgres:password@localhost:5433/moon_mobile_repair
+```
+
+or separate values:
+
+```env
+DB_NAME=moon_mobile_repair
+DB_USER=postgres
+DB_PASSWORD=password
+DB_HOST=localhost
+DB_PORT=5433
+```
+
+Then add the server settings:
+
+```env
 PORT=3001
 NODE_ENV=development
-APP_URL=http://localhost:5173
+JWT_SECRET=replace-this-with-a-long-random-string
+JWT_EXPIRES_IN=7d
+CORS_ORIGIN=http://localhost:3000,http://localhost:5173
+RUN_MIGRATIONS=true
 ```
 
-### 3. Database Setup
+If both `DATABASE_URL` and the `DB_*` values are present, `DATABASE_URL` wins.
+Make sure the port, database name, and credentials match the database you use in
+pgAdmin.
 
-The backend auto-creates tables on first run. Or run manually:
+### 3. Load the schema and seed data
 
 ```bash
 cd backend
-npx tsx src/index.ts
-# Or psql: CREATE DATABASE moon_mobile_repair;
+npm run migrate
 ```
 
-### 4. Run Development
+The command prints the database it connected to. You should see something like:
+
+```text
+Connected to PostgreSQL at localhost:5433/moon_mobile_repair (user: postgres)
+Schema and seed data applied successfully
+```
+
+The API also runs migrations at startup when `RUN_MIGRATIONS=true`.
+
+### 4. Run both apps
+
+In one terminal:
 
 ```bash
-# Start backend (port 3001)
 cd backend
-npx tsx src/index.ts
+npm run dev
+```
 
-# Start frontend (port 3000, proxies /api to 3001)
+In another:
+
+```bash
 cd frontend
 npm run dev
 ```
 
-Open http://localhost:3000 to view the app.
+The frontend runs at http://localhost:3000. Vite proxies `/api` requests to the
+backend at http://localhost:3001.
 
-### 5. Build for Production
+## Demo accounts
 
-```bash
-cd frontend
-npm run build  # Creates dist/ (532 kB gzipped)
-```
+| Role     | Email                         | Password |
+| -------- | ----------------------------- | -------- |
+| Admin    | `admin@moonmobilerepair.com`  | `admin123` |
+| Customer | `anishshrestha2007@gmail.com` | `demo123` |
 
-## 📦 Available Scripts
+Registration creates customer accounts. Admin accounts are managed through the
+database or by an existing admin.
 
-### Frontend (`frontend/package.json`)
-- `npm run dev` - Start development server (Vite, proxy /api → 3001)
-- `npm run build` - Build for production (Vite)
-- `npm run lint` - TypeScript + ESLint check
-- `npm run lint:fix` - Auto-fix ESLint issues
-- `npm run format` - Prettier format all source files
+## Scripts
 
-### Backend (`backend/package.json`)
-- `npm run test` - Test script (placeholder)
-- Manual: `npx tsx src/index.ts` starts the Fastify server
+Frontend, run from `frontend/`:
 
-## 🛠️ Tech Stack
+- `npm run dev` starts Vite on port 3000
+- `npm run build` creates a production build
+- `npm run preview` previews the build
+- `npm test` runs the Vitest suite once
+- `npm run test:watch` runs Vitest in watch mode
+- `npm run typecheck` runs `tsc --noEmit`
+- `npm run lint` runs TypeScript and ESLint
+- `npm run format` runs Prettier
 
-### Frontend
-- **React 19** - Latest React with concurrent features
-- **Vite 6** - Fast HMR and dev server
-- **TailwindCSS v4** - Utility-first CSS styling
-- **React Router 7** - Routing with route guards
-- **Lucide React** - Beautiful icon set
-- **Sonner** - Toast notification system
-- **TypeScript** - Full type safety
-- **ESLint + Prettier** - Code quality
+Backend, run from `backend/`:
 
-### Backend
-- **Fastify** - Fast, low-overhead web framework
-- **PostgreSQL** - Relational database
-- **pg** - PostgreSQL client for Node.js
-- **dotenv** - Environment variable loading
+- `npm run dev` starts the API with `tsx watch`
+- `npm run start` starts the API once
+- `npm run build` compiles TypeScript
+- `npm run typecheck` checks TypeScript without emitting
+- `npm run migrate` applies `schema.sql` and `seed.sql`
+- `npm test` currently runs the typecheck
 
-### Data & Localization
-- **Nepal-focused** - All service areas are Nepal cities
-- **Phone Format** - +977 (Nepal country code)
-- **Currency** - Rs. (Nepalese Rupee)
-- **Mock Data** - Seed data for technicians, services, devices
+## API overview
 
-## 📁 Project Layout
+All routes are under `/api`.
 
-```
+| Method | Route | Purpose |
+| --- | --- | --- |
+| POST | `/users/register` | Create a customer account |
+| POST | `/users/login` | Sign in and receive a JWT |
+| GET | `/users/me` | Current user profile |
+| PUT | `/users/me` | Update name, phone, or avatar |
+| GET | `/technicians` | List technicians |
+| GET | `/technicians/:id` | Technician details |
+| POST | `/technicians` | Create a technician (admin) |
+| PATCH | `/technicians/:id` | Update a technician (admin) |
+| GET | `/services` | List service categories |
+| POST | `/services` | Create a service (admin) |
+| PATCH | `/services/:slug` | Update a service (admin) |
+| DELETE | `/services/:slug` | Delete a service (admin) |
+| POST | `/bookings` | Create a booking |
+| GET | `/bookings` | List bookings for the current user or all bookings for admins |
+| GET | `/bookings/:reference` | Booking details |
+| PATCH | `/bookings/:reference/status` | Update booking status |
+| PATCH | `/bookings/:reference/assign` | Assign a technician (admin) |
+| PATCH | `/bookings/:reference/payment` | Mark a booking paid (admin) |
+| GET | `/bookings/stats/summary` | Admin dashboard totals |
+| GET | `/bookings/export.csv` | Export bookings as CSV (admin) |
+| GET | `/service-areas` | Service area catalog |
+| GET | `/devices` | Device catalog |
+| GET | `/reviews` | Customer reviews |
+| POST | `/contact` | Submit a support message |
+
+## Project layout
+
+```text
 frontend/
-├── src/
-│   ├── App.tsx              # Router: /, /login, /register, /track, /dashboard, /admin
-│   ├── pages/               # LoginPage, RegisterPage, NotFound, TermsOfService, PrivacyPolicy
-│   ├── components/          # Navbar, Hero, DeviceBrandSelector, ProblemSelection,
-│   │                         # ServiceTypeSelector, ServiceLocation, Scheduling,
-│   │                         # CustomerDetails, BookingConfirmation, ErrorBoundary,
-│   │                         # SkeletonLoader, MoonLogo
-│   ├── context/             # AuthContext (demo credentials), RepairContext,
-│   │                         # ThemeContext (dark mode toggle)
-│   ├── hooks/               # useToast (sonner)
-│   ├── data/                # mockData.ts (POPULAR_BRANDS, REPAIR_ISSUES,
-│                           # SERVICE_AREAS, TESTIMONIALS, FAQ_LIST)
-│   └── types.ts             # DeviceType, ServiceType, Booking, Technician types
-├── vite.config.ts           # Proxy: /api → http://localhost:3001
-├── tailwind.config.js       # Tailwind v4 config
-└── package.json
+  src/
+    App.tsx                 Routes, auth guards, providers
+    pages/                  Login, register, support, legal, 404
+    components/             Booking flow, dashboards, tracking, navbar, footer
+    context/                Auth, repair state, theme
+    hooks/                  Toast helpers
+    data/                   Australia-localized demo data
+    lib/api.ts              API client and token handling
+    validations/            Booking form schema
 
 backend/
-├── src/index.ts             # Fastify server, API routes, DB setup
-├── .env                     # DATABASE_URL=postgresql://postgres@localhost:5432/moon_mobile_repair
-├── package.json             # fastify, pg, dotenv dependencies
-└── dist/                    # Production build (if built)
+  src/
+    index.ts                Fastify setup, CORS, health check
+    routes/                 Users, technicians, services, bookings, catalog
+    db.ts                   Connection pool, migrations, transaction helper
+    auth.ts                 JWT and password helpers
+    schemas.ts              Zod request validation
+  database/
+    schema.sql              Tables, indexes, triggers, legacy upgrades
+    seed.sql                Demo users, technicians, services, areas, devices, reviews
+  DATABASE_SETUP.md         pgAdmin setup guide
 ```
 
-## 🌐 API Endpoints
+## Notes and limitations
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET /api/technicians` | Get all technicians |
-| `GET /api/technicians/:id` | Get technician by ID |
-| `POST /api/users/register` | Register new user |
-| `POST /api/users/login` | Login with demo credentials |
-| `GET /api/bookings` | Get all bookings |
-| `POST /api/bookings` | Create new booking |
-| `PUT /api/bookings/:id/status` | Update booking status |
-
-**Demo Credentials** (from AuthContext):
-- **Customer**: `anishshrestha2007@gmail.com` / `password123`
-- **Role selector**: Customer or Admin
-
-## 🎯 Key Pages
-
-### `/login` - Login Page
-- Role selector (Customer / Admin)
-- Demo credentials displayed
-- Redirects to home after login
-
-### `/register` - Register Page
-- Form with name, email, password, terms checkbox
-- Password strength meter
-- Validates terms acceptance
-
-### `/` / `home` - Homepage
-- Hero section with value proposition
-- Device brand selector
-- Repair issue picker
-- Service type choice (home/office/pickup/workshop)
-- Location input (Nepal cities)
-- Scheduling (date & time slots)
-- Customer details form
-- Booking confirmation
-
-### `/track` - Technician Tracking
-- View repair status
-- Live location simulation
-
-### `/dashboard` - Customer Dashboard
-- View all bookings
-- Filter by status
-- Detailed booking information
-
-### `/admin` - Admin Dashboard (Protected)
-- View all bookings
-- Technician management
-- Analytics overview
-
-## 📦 Build Output
-
-```
-frontend/dist/
-├── index.html          # 1.39 kB
-├── assets/index-BRREL_TF.css   # 61.94 kB gzipped
-└── assets/index-f8z7oUmf.js   # 534.02 kB gzipped
-
-backend/                # Runs independently on port 3001
-```
-
-## 📬 Need Help?
-
-- Check the [Issues](https://github.com/your-org/moon-mobile-repair/issues) tab
-- Review the [TypeScript errors](#-lint-errors-note) section above
-- Ensure both frontend and backend are running simultaneously
-
-## 🙏 Acknowledgments
-
-- Nepal service areas and phone format localization
-- React 19 and Vite 6 for performance
-- Fastify for the API backend
-- TailwindCSS v4 for styling
-- Sonner for beautiful toast notifications
-- Lucide for clean icons
+- Bookings are stored in localStorage first and synced to the API when it is
+  reachable. If the API is down, the demo still works locally.
+- Technician tracking and the map view are simulated for demonstration. They do
+  not use a live GPS feed.
+- The repair catalog and technician list are seeded demo data. Prices and
+  availability are not connected to a third-party inventory or payment provider.
+- The theme context is still in the codebase, but the app is currently designed
+  around the light theme.
+- `npm run build` may warn about a JavaScript chunk larger than 500 kB. The build
+  still succeeds; route-level code splitting would be the next step if bundle
+  size becomes important.

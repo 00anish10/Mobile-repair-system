@@ -28,6 +28,20 @@ export interface DeviceBrand {
   models: string[];
 }
 
+export interface TechnicianInput {
+  name: string;
+  phone: string;
+  email?: string;
+  photoUrl?: string;
+  rating?: number;
+  experienceYears: number;
+  vehicle: string;
+  licensePlate: string;
+  activeAreas: string[];
+  status: 'available' | 'on_job' | 'offline';
+  specialties: string[];
+}
+
 export interface Technician {
   id: string;
   name: string;
@@ -95,7 +109,10 @@ export interface ServiceCategory {
   startingPriceRs: number;
   warrantyText: string;
   popularModels: string[];
+  isActive?: boolean;
 }
+
+export type ServiceCategoryInput = Omit<ServiceCategory, 'id'>;
 
 export interface ServiceArea {
   city: string;

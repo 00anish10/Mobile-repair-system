@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Check, ChevronRight, ChevronLeft } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { X, Check, ChevronRight, ChevronLeft, ShieldCheck } from 'lucide-react';
 import { useRepair } from '../context/RepairContext';
+import { useAuth } from '../context/AuthContext';
 import { POPULAR_BRANDS, REPAIR_ISSUES } from '../data/mockData';
 import type { DeviceType, ServiceType } from '../types';
 import { DeviceBrandSelector } from './DeviceBrandSelector';
@@ -11,6 +12,20 @@ import { Scheduling } from './Scheduling';
 import { CustomerDetails } from './CustomerDetails';
 import { BookingConfirmation } from './BookingConfirmation';
 import { useToast } from '../hooks/useToast';
+import { bookingSchema } from '../validations/bookingSchema';
+
+type PaymentMethod = 'cash_on_delivery' | 'card' | 'apple_pay' | 'google_pay' | 'paypal';
+
+const STEPS = ['Device', 'Problem', 'Service', 'Location', 'Schedule', 'Details'];
+
+function localTomorrow(): string {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 export const BookingModal: React.FC = () => {
   const {
@@ -18,17 +33,16 @@ export const BookingModal: React.FC = () => {
     closeBookingModal,
     bookingPrefill,
     createBooking,
-    setActiveTrackingId,
-    setActiveView,
     userEmail,
   } = useRepair();
+  const { user } = useAuth();
+  const { success } = useToast();
 
-  // Multi-step tracker (1 to 7)
   const [currentStep, setCurrentStep] = useState(1);
   const [completedBookingId, setCompletedBookingId] = useState<string | null>(null);
   const prefillAppliedRef = useRef(false);
+  const contentRef = useRef<HTMLDivElement>(null);
 
-  // Form State
   const [deviceCategory, setDeviceCategory] = useState<DeviceType>('iphone');
   const [selectedBrand, setSelectedBrand] = useState('Apple');
   const [selectedModel, setSelectedModel] = useState('iPhone 15 Pro');
@@ -38,82 +52,77 @@ export const BookingModal: React.FC = () => {
 
   const [serviceType, setServiceType] = useState<ServiceType>('home');
 
-  const [address, setAddress] = useState('House 42, Sanepa Heights, Ward 2');
-  const [city, setCity] = useState('Lalitpur');
-  const [area, setArea] = useState('Sanepa / Jhamsikhel');
-  const [landmark, setLandmark] = useState('Near British School Gate');
+  const [address, setAddress] = useState('');
+  const [city, setCity] = useState('Sydney');
+  const [area, setArea] = useState('');
+  const [landmark, setLandmark] = useState('');
 
-  // Schedule
-  const [scheduledDate, setScheduledDate] = useState(() => {
-    const today = new Date();
-    today.setDate(today.getDate() + 1);
-    return today.toISOString().split('T')[0];
-  });
+  const [scheduledDate, setScheduledDate] = useState(localTomorrow);
   const [scheduledTimeSlot, setScheduledTimeSlot] = useState('11:00 AM - 01:00 PM');
 
-  // Customer Info
-  const [customerName, setCustomerName] = useState('Anish Shrestha');
-  const [customerPhone, setCustomerPhone] = useState('+977 9841556677');
-  const [customerEmail, setCustomerEmail] = useState(userEmail || 'anishshrestha2007@gmail.com');
-  const [paymentMethod, setPaymentMethod] = useState<'cash_on_delivery' | 'card' | 'apple_pay' | 'google_pay' | 'paypal'>('card');
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerEmail, setCustomerEmail] = useState(userEmail || '');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash_on_delivery');
 
-  // Errors
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Apply prefill if any
+  // Reset the wizard whenever it is opened.
+  useEffect(() => {
+    if (!isBookingModalOpen) {
+      prefillAppliedRef.current = false;
+      return;
+    }
+    setCurrentStep(1);
+    setCompletedBookingId(null);
+    setErrors({});
+    if (user) {
+      setCustomerName((prev) => prev || user.name);
+      setCustomerPhone((prev) => prev || user.phone);
+      setCustomerEmail(user.email);
+    }
+  }, [isBookingModalOpen, user]);
+
   useEffect(() => {
     if (!bookingPrefill || prefillAppliedRef.current) return;
     prefillAppliedRef.current = true;
     if (bookingPrefill.brand) {
       setSelectedBrand(bookingPrefill.brand);
-      const bObj = POPULAR_BRANDS.find((b) => b.name === bookingPrefill.brand);
-      if (bObj && bObj.models.length > 0) {
-        setSelectedModel(bookingPrefill.model || bObj.models[0]);
-        setDeviceCategory(bObj.category);
+      const brand = POPULAR_BRANDS.find((b) => b.name === bookingPrefill.brand);
+      if (brand) {
+        setSelectedModel(bookingPrefill.model || brand.models[0]);
+        setDeviceCategory(brand.category);
       }
     }
-    if (bookingPrefill.problemId) {
-      setProblemId(bookingPrefill.problemId);
-    }
-    if (bookingPrefill.serviceType) {
-      setServiceType(bookingPrefill.serviceType);
-    }
+    if (bookingPrefill.problemId) setProblemId(bookingPrefill.problemId);
+    if (bookingPrefill.serviceType) setServiceType(bookingPrefill.serviceType);
+    if (bookingPrefill.city) setCity(bookingPrefill.city);
   }, [bookingPrefill]);
 
-  // Reset prefill flag when modal closes
   useEffect(() => {
-    if (!isBookingModalOpen) {
-      prefillAppliedRef.current = false;
-    }
-  }, [isBookingModalOpen]);
+    contentRef.current?.scrollTo({ top: 0 });
+  }, [currentStep]);
 
-  // Selected brand data
-  const currentBrandObj = POPULAR_BRANDS.find((b) => b.name === selectedBrand) || POPULAR_BRANDS[0];
   const currentProblemObj = REPAIR_ISSUES.find((p) => p.id === problemId) || REPAIR_ISSUES[0];
 
-  // Calculate pricing
   const calculatedCost = useMemo(() => {
     let price = currentProblemObj.basePriceRs;
-    if (selectedModel.includes('Pro Max') || selectedModel.includes('Ultra') || selectedModel.includes('MacBook Pro')) {
+    if (
+      selectedModel.includes('Pro Max') ||
+      selectedModel.includes('Ultra') ||
+      selectedModel.includes('MacBook Pro')
+    ) {
       price = Math.round(price * 1.6);
-    } else if (selectedModel.includes('Pro') || selectedModel.includes('Air') || selectedModel.includes('XPS')) {
+    } else if (
+      selectedModel.includes('Pro') ||
+      selectedModel.includes('Air') ||
+      selectedModel.includes('XPS')
+    ) {
       price = Math.round(price * 1.3);
     }
-    if (serviceType === 'pickup') {
-      price += 25; // nominal courier insurance
-    }
+    if (serviceType === 'pickup') price += 25;
     return price;
   }, [currentProblemObj, selectedModel, serviceType]);
-
-  const handleNext = () => {
-    if (validateCurrentStep()) {
-      setCurrentStep((prev) => Math.min(prev + 1, 7));
-    }
-  };
-
-  const handleBack = () => {
-    setCurrentStep((prev) => Math.max(prev - 1, 1));
-  };
 
   const validateCurrentStep = (): boolean => {
     const errs: Record<string, string> = {};
@@ -125,38 +134,82 @@ export const BookingModal: React.FC = () => {
       if (!problemId) errs.problem = 'Please choose the repair issue.';
     } else if (currentStep === 4) {
       if (!address.trim()) errs.address = 'Street address is required for doorstep visit.';
-      if (!city) errs.city = 'Please choose city.';
-      if (!area.trim()) errs.area = 'Area/neighborhood is required.';
+      if (!city) errs.city = 'Please choose a city.';
+      if (!area.trim()) errs.area = 'Suburb / area is required.';
     } else if (currentStep === 5) {
-      if (!scheduledDate) errs.date = 'Please pick a date.';
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (!scheduledDate) {
+        errs.date = 'Please pick a date.';
+      } else if (new Date(`${scheduledDate}T00:00:00`) < today) {
+        errs.date = 'Please choose today or a future date.';
+      }
       if (!scheduledTimeSlot) errs.time = 'Please pick an arrival time slot.';
     } else if (currentStep === 6) {
-      if (!customerName.trim()) errs.name = 'Full name is required.';
-      if (!customerPhone.trim() || customerPhone.trim().length < 8) errs.phone = 'Valid phone number is required for the technician to reach you.';
-      if (!customerEmail.trim() || !customerEmail.includes('@')) errs.email = 'Valid email is required for the booking confirmation.';
+      if (customerName.trim().length < 2) errs.name = 'Please enter your full name.';
+      if (!/^\+?[0-9\s\-()]{8,}$/.test(customerPhone.trim())) {
+        errs.phone = 'Enter a valid Australian phone number, e.g. +61 412 345 678.';
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
+        errs.email = 'Enter a valid email for your invoice and warranty.';
+      }
     }
 
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
+  const handleNext = () => {
+    if (validateCurrentStep()) setCurrentStep((prev) => Math.min(prev + 1, 7));
+  };
+
+  const handleBack = () => setCurrentStep((prev) => Math.max(prev - 1, 1));
+
   const handleConfirmBooking = () => {
     if (!validateCurrentStep()) return;
 
-    const newBooking = createBooking({
-      customerName,
-      customerPhone,
-      customerEmail,
+    const result = bookingSchema.safeParse({
+      selectedBrand,
+      selectedModel,
+      problemId,
+      serviceType,
       address,
       city,
       area,
-      landmark,
+      scheduledDate,
+      scheduledTimeSlot,
+      customerName,
+      customerPhone,
+      customerEmail,
+      paymentMethod,
+      estimatedCostRs: calculatedCost,
+      photoUrls: [],
+    });
+
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {};
+      for (const issue of result.error.issues) {
+        fieldErrors[String(issue.path[0] ?? 'form')] = issue.message;
+      }
+      setErrors(fieldErrors);
+      return;
+    }
+
+    const newBooking = createBooking({
+      customerName: customerName.trim(),
+      customerPhone: customerPhone.trim(),
+      customerEmail: customerEmail.trim(),
+      address: address.trim(),
+      city,
+      area: area.trim(),
+      landmark: landmark.trim(),
       deviceType: deviceCategory,
       brand: selectedBrand,
       model: selectedModel,
       problemId,
       problemTitle: currentProblemObj.name,
-      problemDescription: problemDescription || `Issue reported: ${currentProblemObj.name} on ${selectedBrand} ${selectedModel}`,
+      problemDescription:
+        problemDescription || `Issue reported: ${currentProblemObj.name} on ${selectedBrand} ${selectedModel}`,
       serviceType,
       scheduledDate,
       scheduledTimeSlot,
@@ -168,14 +221,9 @@ export const BookingModal: React.FC = () => {
 
     setCompletedBookingId(newBooking.id);
     setCurrentStep(7);
-  };
-
-  const handleViewTracking = () => {
-    if (completedBookingId) {
-      setActiveTrackingId(completedBookingId);
-      closeBookingModal();
-      setActiveView('track');
-    }
+    success('Booking confirmed!', {
+      description: `Your reference is ${newBooking.id}. A technician has been assigned.`,
+    });
   };
 
   if (!isBookingModalOpen) return null;
@@ -183,13 +231,12 @@ export const BookingModal: React.FC = () => {
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
       <div className="relative bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
-        {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div>
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+              <span className="w-2 h-2 rounded-full bg-blue-600" />
               <h3 className="font-extrabold text-base sm:text-lg text-slate-900">
-                {currentStep === 7 ? 'Booking Confirmed!' : 'Book Moon Mobile Repair'}
+                {currentStep === 7 ? 'Booking confirmed!' : 'Book Moon Mobile Repair'}
               </h3>
             </div>
             {currentStep < 7 && (
@@ -203,80 +250,153 @@ export const BookingModal: React.FC = () => {
             type="button"
             onClick={closeBookingModal}
             className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+            aria-label="Close booking dialog"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Step Indicator Bar */}
         {currentStep < 7 && (
-          <div className="px-6 pt-3 pb-2 bg-white border-b border-slate-100">
+          <div className="px-4 sm:px-6 pt-3 pb-2 bg-white border-b border-slate-100">
             <div className="flex items-center justify-between gap-1">
-              <div className="flex-1 flex flex-col items-center">
-                <div className="w-6 h-6 rounded-full text-[11px] font-bold flex items-center justify-center transition-all bg-blue-600 text-white ring-2 ring-blue-600/30">
-                  <Check className="w-3.5 h-3.5" />
-                </div>
-                <span className="text-[10px] mt-1 font-semibold text-blue-600">Device</span>
-              </div>
-              <div className="flex-1 flex flex-col items-center">
-                <div className="w-6 h-6 rounded-full text-[11px] font-bold flex items-center justify-center bg-emerald-600 text-white">
-                  <Check className="w-3.5 h-3.5" />
-                </div>
-                <span className="text-[10px] mt-1 font-semibold text-emerald-600">Problem</span>
-              </div>
-              <div className="flex-1 flex flex-col items-center">
-                <div className="w-6 h-6 rounded-full text-[11px] font-bold flex items-center justify-center bg-slate-100 text-slate-400">
-                  3
-                </div>
-                <span className="text-[10px] mt-1 font-semibold text-slate-400">Service</span>
-              </div>
-              <div className="flex-1 flex flex-col items-center">
-                <div className="w-6 h-6 rounded-full text-[11px] font-bold flex items-center justify-center bg-slate-100 text-slate-400">
-                  4
-                </div>
-                <span className="text-[10px] mt-1 font-semibold text-slate-400">Location</span>
-              </div>
-              <div className="flex-1 flex flex-col items-center">
-                <div className="w-6 h-6 rounded-full text-[11px] font-bold flex items-center justify-center bg-slate-100 text-slate-400">
-                  5
-                </div>
-                <span className="text-[10px] mt-1 font-semibold text-slate-400">Schedule</span>
-              </div>
-              <div className="flex-1 flex flex-col items-center">
-                <div className="w-6 h-6 rounded-full text-[11px] font-bold flex items-center justify-center bg-slate-100 text-slate-400">
-                  6
-                </div>
-                <span className="text-[10px] mt-1 font-semibold text-slate-400">Details</span>
-              </div>
+              {STEPS.map((label, index) => {
+                const stepNumber = index + 1;
+                const isComplete = currentStep > stepNumber;
+                const isCurrent = currentStep === stepNumber;
+                return (
+                  <div key={label} className="flex-1 flex flex-col items-center">
+                    <div
+                      className={`w-6 h-6 rounded-full text-[11px] font-bold flex items-center justify-center transition-all ${
+                        isComplete
+                          ? 'bg-emerald-600 text-white'
+                          : isCurrent
+                          ? 'bg-blue-600 text-white ring-2 ring-blue-600/30'
+                          : 'bg-slate-100 text-slate-400'
+                      }`}
+                    >
+                      {isComplete ? <Check className="w-3.5 h-3.5" /> : stepNumber}
+                    </div>
+                    <span
+                      className={`text-[10px] mt-1 font-semibold ${
+                        isCurrent ? 'text-blue-600' : isComplete ? 'text-emerald-600' : 'text-slate-400'
+                      }`}
+                    >
+                      {label}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* Modal Scrollable Body */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1 text-slate-900">
-          {/* STEP 1: DEVICE */}
-          {currentStep === 1 && <DeviceBrandSelector selectedBrand={selectedBrand} setSelectedBrand={setSelectedBrand} selectedModel={selectedModel} setSelectedModel={setSelectedModel} deviceCategory={deviceCategory} setDeviceCategory={setDeviceCategory} errors={errors} setErrors={setErrors} currentStep={currentStep} onNext={handleNext} />}
+        <div
+          ref={contentRef}
+          className="p-6 overflow-y-auto space-y-6 flex-1 text-slate-900"
+        >
+          {currentStep === 1 && (
+            <DeviceBrandSelector
+              selectedBrand={selectedBrand}
+              setSelectedBrand={setSelectedBrand}
+              selectedModel={selectedModel}
+              setSelectedModel={setSelectedModel}
+              deviceCategory={deviceCategory}
+              setDeviceCategory={setDeviceCategory}
+              errors={errors}
+              setErrors={setErrors}
+              currentStep={currentStep}
+              onNext={handleNext}
+            />
+          )}
 
-          {/* STEP 2: PROBLEM */}
-          {currentStep === 2 && <ProblemSelection problemId={problemId} setProblemId={setProblemId} problemDescription={problemDescription} setProblemDescription={setProblemDescription} errors={errors} setErrors={setErrors} currentStep={currentStep} onNext={handleNext} />}
+          {currentStep === 2 && (
+            <ProblemSelection
+              problemId={problemId}
+              setProblemId={setProblemId}
+              problemDescription={problemDescription}
+              setProblemDescription={setProblemDescription}
+              errors={errors}
+              setErrors={setErrors}
+              currentStep={currentStep}
+              onNext={handleNext}
+            />
+          )}
 
-          {/* STEP 3: SERVICE TYPE */}
-          {currentStep === 3 && <ServiceTypeSelector serviceType={serviceType} setServiceType={setServiceType} currentStep={currentStep} onNext={handleNext} />}
+          {currentStep === 3 && (
+            <ServiceTypeSelector
+              serviceType={serviceType}
+              setServiceType={setServiceType}
+              currentStep={currentStep}
+              onNext={handleNext}
+            />
+          )}
 
-          {/* STEP 4: LOCATION */}
-          {currentStep === 4 && <ServiceLocation address={address} setAddress={setAddress} city={city} setCity={setCity} area={area} setArea={setArea} landmark={landmark} setLandmark={setLandmark} errors={errors} setErrors={setErrors} currentStep={currentStep} onNext={handleNext} />}
+          {currentStep === 4 && (
+            <ServiceLocation
+              address={address}
+              setAddress={setAddress}
+              city={city}
+              setCity={setCity}
+              area={area}
+              setArea={setArea}
+              landmark={landmark}
+              setLandmark={setLandmark}
+              errors={errors}
+              setErrors={setErrors}
+              currentStep={currentStep}
+              onNext={handleNext}
+            />
+          )}
 
-          {/* STEP 5: SCHEDULE */}
-          {currentStep === 5 && <Scheduling scheduledDate={scheduledDate} setScheduledDate={setScheduledDate} scheduledTimeSlot={scheduledTimeSlot} setScheduledTimeSlot={setScheduledTimeSlot} errors={errors} setErrors={setErrors} currentStep={currentStep} onNext={handleNext} />}
+          {currentStep === 5 && (
+            <Scheduling
+              scheduledDate={scheduledDate}
+              setScheduledDate={setScheduledDate}
+              scheduledTimeSlot={scheduledTimeSlot}
+              setScheduledTimeSlot={setScheduledTimeSlot}
+              errors={errors}
+              setErrors={setErrors}
+              currentStep={currentStep}
+              onNext={handleNext}
+            />
+          )}
 
-          {/* STEP 6: CUSTOMER DETAILS */}
-          {currentStep === 6 && <CustomerDetails customerName={customerName} setCustomerName={setCustomerName} customerPhone={customerPhone} setCustomerPhone={setCustomerPhone} customerEmail={customerEmail} setCustomerEmail={setCustomerEmail} paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod} errors={errors} setErrors={setErrors} calculatedCost={calculatedCost} currentStep={currentStep} onNext={handleConfirmBooking} />}
+          {currentStep === 6 && (
+            <CustomerDetails
+              customerName={customerName}
+              setCustomerName={setCustomerName}
+              customerPhone={customerPhone}
+              setCustomerPhone={setCustomerPhone}
+              customerEmail={customerEmail}
+              setCustomerEmail={setCustomerEmail}
+              paymentMethod={paymentMethod}
+              setPaymentMethod={setPaymentMethod}
+              errors={errors}
+              setErrors={setErrors}
+              calculatedCost={calculatedCost}
+              currentStep={currentStep}
+              onNext={handleConfirmBooking}
+              deviceLabel={`${selectedBrand} ${selectedModel}`}
+              problemLabel={currentProblemObj.name}
+              appointmentLabel={`${scheduledDate} • ${scheduledTimeSlot}`}
+              serviceLabel={serviceType}
+            />
+          )}
 
-          {/* STEP 7: CONFIRMATION */}
-          {currentStep === 7 && <BookingConfirmation completedBookingId={completedBookingId} setCompletedBookingId={setCompletedBookingId} setCurrentStep={setCurrentStep} closeBookingModal={closeBookingModal} setActiveView={setActiveView} deviceCategory={deviceCategory} selectedBrand={selectedBrand} selectedModel={selectedModel} currentProblemObj={currentProblemObj} scheduledDate={scheduledDate} scheduledTimeSlot={scheduledTimeSlot} calculatedCost={calculatedCost} />}
+          {currentStep === 7 && (
+            <BookingConfirmation
+              completedBookingId={completedBookingId}
+              closeBookingModal={closeBookingModal}
+              selectedBrand={selectedBrand}
+              selectedModel={selectedModel}
+              currentProblemObj={currentProblemObj}
+              scheduledDate={scheduledDate}
+              scheduledTimeSlot={scheduledTimeSlot}
+              calculatedCost={calculatedCost}
+            />
+          )}
         </div>
 
-        {/* Modal Footer Controls */}
         {currentStep < 7 && (
           <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
             {currentStep > 1 ? (
@@ -293,9 +413,15 @@ export const BookingModal: React.FC = () => {
             )}
 
             <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-slate-700 hidden sm:inline">
-                Est. $ {calculatedCost.toLocaleString()}
-              </span>
+              <div className="hidden sm:block text-right">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  Estimated total
+                </p>
+                <p className="text-xs font-bold text-slate-700 flex items-center gap-1 justify-end">
+                  <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                  ${calculatedCost.toLocaleString()}
+                </p>
+              </div>
 
               {currentStep < 6 ? (
                 <button
@@ -313,7 +439,7 @@ export const BookingModal: React.FC = () => {
                   className="flex items-center gap-1.5 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold shadow-md transition-colors cursor-pointer"
                 >
                   <Check className="w-4 h-4" />
-                  <span>Confirm Booking</span>
+                  <span>Confirm booking</span>
                 </button>
               )}
             </div>

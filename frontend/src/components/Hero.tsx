@@ -1,5 +1,4 @@
 import React from 'react';
-import { SkeletonLoader, SkeletonTitle, SkeletonParagraph } from './SkeletonLoader/Loader';
 import {
   Calendar,
   Sparkles,
@@ -8,10 +7,11 @@ import {
   Home,
   Star,
   ArrowRight,
-  Shield,
   Zap,
   MapPin,
   Lock,
+  Wrench,
+  BadgeCheck,
 } from 'lucide-react';
 import { useRepair } from '../context/RepairContext';
 
@@ -19,29 +19,30 @@ export const Hero: React.FC = () => {
   const { openBookingModal, setActiveView } = useRepair();
 
   const scrollToSelector = () => {
-    const el = document.getElementById('device-selector');
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
-    }
+    document.getElementById('device-selector')?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  const pillars = [
+    { icon: Zap, label: 'Fast Service', detail: '60-min express dispatch' },
+    { icon: BadgeCheck, label: 'Transparent Pricing', detail: 'No hidden fees' },
+    { icon: Wrench, label: 'Certified Technicians', detail: 'Micro-soldering experts' },
+    { icon: Home, label: 'Doorstep Repairs', detail: 'We come to you' },
+    { icon: ShieldCheck, label: 'Repair Warranty', detail: 'Up to 12 months' },
+    { icon: Lock, label: 'Data Privacy', detail: 'Device never leaves your sight' },
+  ];
 
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-blue-50/60 via-white to-slate-50 pt-8 pb-16 lg:pt-14 lg:pb-24 border-b border-slate-200">
-      {/* Subtle geometric pattern backdrop */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#0284c70a_1px,transparent_1px),linear-gradient(to_bottom,#0284c70a_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none"></div>
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#0284c70a_1px,transparent_1px),linear-gradient(to_bottom,#0284c70a_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-          {/* Left Column: Core Value Proposition */}
           <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
-            {/* Value Tag */}
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-100/80 border border-blue-200 text-blue-800 text-xs sm:text-sm font-semibold shadow-xs">
               <span className="flex h-2 w-2 rounded-full bg-blue-600 animate-ping" />
               <span>Moon Mobile Repair • Certified Device Specialists</span>
             </div>
 
-            {/* Main Headline with skeleton loader */}
-            <SkeletonTitle size="large" className="mb-4 animate-opacity" />
             <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.12]">
               Professional Device Repair by{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 underline decoration-blue-300 decoration-wavy decoration-2">
@@ -49,15 +50,11 @@ export const Hero: React.FC = () => {
               </span>
             </h1>
 
-            {/* Subheadline with skeleton loader */}
-            <SkeletonParagraph lines={3} className="mb-6 animate-opacity" />
             <p className="text-base sm:text-lg lg:text-xl text-slate-600 max-w-2xl mx-auto lg:mx-0 leading-relaxed font-normal">
-              Book a trusted technician and get your smartphone, tablet, laptop, or electronic device expertly serviced with upfront pricing and genuine parts.
+              Book a trusted technician and get your smartphone, tablet, laptop, or electronic
+              device expertly serviced with upfront pricing and genuine parts.
             </p>
 
-            {/* Action Buttons */}
-
-            {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3.5 pt-2">
               <button
                 type="button"
@@ -81,43 +78,31 @@ export const Hero: React.FC = () => {
               </button>
             </div>
 
-            {/* 5 Core Trust Pillars with skeleton loaders */}
-            <SkeletonLoader width="100%" height={20} className="animate-opacity" />
-            <div className="pt-4 border-t border-slate-200/80 grid grid-cols-2 sm:grid-cols-3 gap-3 text-left">
-              <SkeletonLoader width="80%" height={14} className="rounded-xl animate-opacity" />
-              <div className="hidden sm:block text-[11px] font-semibold text-slate-900">Fast Service</div>
-              <SkeletonLoader height={11} className="mt-1 text-[11px] text-slate-500 animate-opacity" />
-              <SkeletonLoader width="60%" height={11} className="mt-1 text-[11px] text-slate-500 rounded-auto animate-opacity" />
-
-              <SkeletonLoader width="70%" height={14} className="rounded-xl animate-opacity" />
-              <div className="hidden sm:block text-[11px] font-semibold text-slate-900">Transparent Pricing</div>
-              <SkeletonLoader height={11} className="mt-1 text-[11px] text-slate-500 animate-opacity" />
-              <SkeletonLoader width="40%" height={11} className="mt-1 text-[11px] text-slate-500 rounded-auto animate-opacity" />
-
-              <SkeletonLoader width="80%" height={14} className="rounded-xl animate-opacity" />
-              <div className="hidden sm:block text-[11px] font-semibold text-slate-900">Experienced Techs</div>
-              <SkeletonLoader height={11} className="mt-1 text-[11px] text-slate-500 animate-opacity" />
-              <SkeletonLoader width="50%" height={11} className="mt-1 text-[11px] text-slate-500 rounded-auto animate-opacity" />
-
-              <SkeletonLoader width="75%" height={14} className="rounded-xl animate-opacity" />
-              <div className="hidden sm:block text-[11px] font-semibold text-slate-900">Convenient Home Visits</div>
-              <SkeletonLoader height={11} className="mt-1 text-[11px] text-slate-500 animate-opacity" />
-              <SkeletonLoader width="65%" height={11} className="mt-1 text-[11px] text-slate-500 rounded-auto animate-opacity" />
-
-              <SkeletonLoader width="100%" height={14} className="rounded-xl animate-opacity" />
-              <div className="hidden sm:block text-[11px] font-semibold text-slate-900">Warranty on Eligible Repairs</div>
-              <SkeletonLoader height={11} className="mt-1 text-[11px] text-slate-500 animate-opacity" />
-              <SkeletonLoader width="70%" height={11} className="mt-1 text-[11px] text-slate-500 rounded-auto animate-opacity" />
+            <div className="pt-6 border-t border-slate-200/80 grid grid-cols-2 sm:grid-cols-3 gap-4 text-left">
+              {pillars.map((pillar) => {
+                const Icon = pillar.icon;
+                return (
+                  <div key={pillar.label} className="flex items-start gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 text-blue-600 flex items-center justify-center shrink-0">
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] sm:text-xs font-bold text-slate-900">
+                        {pillar.label}
+                      </p>
+                      <p className="text-[10px] sm:text-[11px] text-slate-500">{pillar.detail}</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* Right Column: Interactive Experience Card */}
           <div className="lg:col-span-5">
             <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xl p-5 sm:p-6 relative">
-              {/* Top Banner inside card */}
               <div className="flex items-center justify-between pb-4 border-b border-slate-100">
                 <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
+                  <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
                   <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
                     Live Mobile Dispatch
                   </span>
@@ -125,33 +110,55 @@ export const Hero: React.FC = () => {
                 <div className="flex items-center gap-1 text-amber-500 text-xs font-bold">
                   <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                   <span>4.92 / 5.0</span>
-                  <span className="text-slate-400 font-normal">(2,400+ reviews)</span>
+                  <span className="text-slate-400 font-normal hidden sm:inline">(2,400+)</span>
                 </div>
               </div>
 
-              {/* Technician In-Transit Skeleton */}
-              <SkeletonLoader width="130" height={130} className="rounded-xl mb-4 animate-opacity" />
               <div className="mt-4 p-4 rounded-xl bg-slate-50 border border-slate-200/70">
-                <SkeletonLoader width="75%" height={14} className="mb-2 text-sm font-bold text-slate-900 rounded-xl animate-opacity" />
-                <SkeletonLoader height={11} className="text-[10px] text-slate-500 animate-opacity" />
-                <SkeletonLoader width="100%" height={14} className="text-xs text-slate-500 animate-opacity" />
-                <SkeletonLoader width="100%" height={11} className="text-[11px] text-slate-600 mt-1 animate-opacity" />
-
-                {/* Micro Progress Bar */}
-                <div className="mt-3 pt-3 border-t border-slate-200/60">
-                  <div className="flex justify-between text-[11px] font-semibold text-slate-600 mb-1.5">
-                    <span className="flex items-center gap-1 text-blue-600 font-bold">
-                      <Zap className="w-3 h-3" /> Traveling to Customer Address
-                    </span>
-                    <span className="text-slate-700">75% Complete</span>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="relative">
+                    <img
+                      src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&h=120&fit=crop"
+                      alt="Certified technician"
+                      referrerPolicy="no-referrer"
+                      className="w-12 h-12 rounded-xl object-cover ring-2 ring-blue-500/30"
+                    />
+                    <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white" />
                   </div>
-                  <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                    <div className="bg-gradient-to-r from-blue-600 to-emerald-500 h-full w-3/4 rounded-full transition-all"></div>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-slate-900">Ramesh Sharma</p>
+                    <p className="text-[11px] text-slate-500 flex items-center gap-1">
+                      <Star className="w-3 h-3 fill-amber-400 text-amber-400" /> 4.90 •
+                      Screen specialist • 5 yrs
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    On the way
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-600 mb-1.5">
+                  <span className="flex items-center gap-1 text-blue-600 font-bold">
+                    <Zap className="w-3 h-3" /> Travelling to Surry Hills, Sydney
+                  </span>
+                  <span className="text-slate-700 font-semibold">ETA 18 min</span>
+                </div>
+                <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                  <div className="bg-gradient-to-r from-blue-600 to-emerald-500 h-full w-3/4 rounded-full transition-all" />
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-slate-200/60 grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="flex items-center gap-1.5 text-slate-600">
+                    <Clock className="w-3.5 h-3.5 text-slate-400" />
+                    Arrives 11:00–01:00
+                  </div>
+                  <div className="flex items-center gap-1.5 text-slate-600">
+                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                    Sydney, NSW
                   </div>
                 </div>
               </div>
 
-              {/* Data Safety & Privacy Callout */}
               <div className="mt-4 p-3.5 rounded-xl bg-blue-50/70 border border-blue-100 flex items-start gap-3">
                 <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
                   <Lock className="w-4 h-4" />
@@ -159,12 +166,12 @@ export const Hero: React.FC = () => {
                 <div>
                   <h4 className="text-xs font-bold text-slate-900">100% Data Privacy Guaranteed</h4>
                   <p className="text-[11px] text-slate-600 leading-snug">
-                    Never leave your phone with strangers. Your personal photos, WhatsApp, and banking apps never leave your sight.
+                    Never leave your phone with strangers. Your personal photos, WhatsApp, and
+                    banking apps never leave your sight.
                   </p>
                 </div>
               </div>
 
-              {/* Instant Action Row */}
               <div className="mt-5 grid grid-cols-2 gap-2.5">
                 <button
                   type="button"
@@ -179,7 +186,7 @@ export const Hero: React.FC = () => {
                   onClick={() => setActiveView('track')}
                   className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold text-xs sm:text-sm transition-colors cursor-pointer"
                 >
-                  <span>Track #REP-2026-00125</span>
+                  <span>Track a Repair</span>
                   <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
                 </button>
               </div>

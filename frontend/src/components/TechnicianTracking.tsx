@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Search,
   MapPin,
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useRepair } from '../context/RepairContext';
 import type { BookingStatus } from '../types';
+import { useToast } from '../hooks/useToast';
 
 export const TechnicianTracking: React.FC = () => {
   const {
@@ -24,18 +25,29 @@ export const TechnicianTracking: React.FC = () => {
     setActiveTrackingId,
     getBookingById,
     getTechnicianById,
+    refreshBookings,
     updateBookingStatus,
     setActiveView,
+    currentRole,
+    userEmail,
   } = useRepair();
 
-  const [searchQuery, setSearchQuery] = useState(() => activeTrackingId || '#REP-2026-00125');
+  const [searchQuery, setSearchQuery] = useState(() => activeTrackingId || '');
+  const { error: showError } = useToast();
 
-  const currentBooking = useMemo(() => {
-    if (activeTrackingId) {
-      return getBookingById(activeTrackingId) || bookings[0];
-    }
-    return bookings[0];
-  }, [activeTrackingId, bookings, getBookingById]);
+  const fallbackBooking = useMemo(() => {
+    if (!userEmail || currentRole === 'admin') return undefined;
+    return (
+      bookings.find(
+        (booking) => booking.status !== 'completed' && booking.status !== 'cancelled'
+      ) || bookings[0]
+    );
+  }, [bookings, currentRole, userEmail]);
+
+  const currentBooking = useMemo(
+    () => (activeTrackingId ? getBookingById(activeTrackingId) : undefined) || fallbackBooking,
+    [activeTrackingId, fallbackBooking, getBookingById]
+  );
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,11 +56,81 @@ export const TechnicianTracking: React.FC = () => {
     if (found) {
       setActiveTrackingId(found.id);
     } else {
-      alert(`No booking found with ID "${searchQuery}". Try #REP-2026-00125 or create a new booking!`);
+      showError('Booking not found', {
+        description: `No repair matches "${searchQuery}". Check the ID or book a new repair.`,
+      });
     }
   };
 
   const technician = getTechnicianById(currentBooking?.technicianId);
+
+  useEffect(() => {
+    const trackingId = activeTrackingId || currentBooking?.id;
+    if (trackingId) setSearchQuery(trackingId);
+  }, [activeTrackingId, currentBooking?.id]);
+
+  const currentBookingId = currentBooking?.id;
+
+  useEffect(() => {
+    if (!userEmail || !currentBookingId) return undefined;
+    const interval = window.setInterval(() => {
+      void refreshBookings();
+    }, 15000);
+    return () => window.clearInterval(interval);
+  }, [userEmail, currentBookingId, refreshBookings]);
+
+  const trackingState = useMemo(() => {
+    switch (currentBooking?.status) {
+      case 'confirmed':
+        return {
+          arrival: 'Awaiting technician assignment',
+          etaCaption: 'Dispatch status:',
+          showVan: false,
+        };
+      case 'technician_assigned':
+        return {
+          arrival: 'Technician assigned',
+          etaCaption: 'Dispatch status:',
+          showVan: false,
+        };
+      case 'technician_en_route':
+        return {
+          arrival: '15-25 minutes',
+          etaCaption: 'Estimated doorstep arrival:',
+          showVan: true,
+        };
+      case 'technician_arrived':
+        return {
+          arrival: 'At your doorstep',
+          etaCaption: 'Current status:',
+          showVan: true,
+        };
+      case 'in_progress':
+        return {
+          arrival: 'Repair in progress',
+          etaCaption: 'Current status:',
+          showVan: true,
+        };
+      case 'completed':
+        return {
+          arrival: 'Repair completed',
+          etaCaption: 'Final status:',
+          showVan: false,
+        };
+      case 'cancelled':
+        return {
+          arrival: 'Booking cancelled',
+          etaCaption: 'Current status:',
+          showVan: false,
+        };
+      default:
+        return {
+          arrival: 'Preparing dispatch',
+          etaCaption: 'Dispatch status:',
+          showVan: false,
+        };
+    }
+  }, [currentBooking?.status]);
 
   // Status timeline steps
   const timelineSteps: { key: BookingStatus; label: string; desc: string }[] = [
@@ -75,12 +157,17 @@ export const TechnicianTracking: React.FC = () => {
   };
 
   if (!currentBooking) {
+    const recentBookings = bookings
+      .filter((booking) => booking.status !== 'cancelled')
+      .slice(0, 3);
+
     return (
       <div className="py-20 text-center max-w-xl mx-auto px-4">
         <AlertCircle className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-        <h3 className="text-xl font-bold text-slate-900">No Booking Selected</h3>
+        <h3 className="text-xl font-bold text-slate-900">Track Your Repair</h3>
         <p className="text-sm text-slate-500 mt-1 mb-6">
-          Enter your Booking ID (e.g. #REP-2026-00125) to track your doorstep repair technician.
+          Enter your Booking ID (e.g. #REP-2026-00125) to see live technician updates,
+          arrival estimates, and warranty details.
         </p>
         <form onSubmit={handleSearch} className="flex gap-2 max-w-md mx-auto">
           <input
@@ -97,6 +184,35 @@ export const TechnicianTracking: React.FC = () => {
             Track
           </button>
         </form>
+
+        {recentBookings.length > 0 && (
+          <div className="mt-8 text-left">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Recent repairs
+            </p>
+            <div className="space-y-2">
+              {recentBookings.map((booking) => (
+                <button
+                  key={booking.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveTrackingId(booking.id);
+                    setSearchQuery(booking.id);
+                  }}
+                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-blue-300 hover:bg-blue-50/40"
+                >
+                  <div className="min-w-0">
+                    <p className="font-mono text-sm font-bold text-slate-900">{booking.id}</p>
+                    <p className="truncate text-xs text-slate-500">
+                      {booking.brand} {booking.model} • {booking.problemTitle}
+                    </p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-blue-600" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -145,21 +261,24 @@ export const TechnicianTracking: React.FC = () => {
           </form>
         </div>
 
-        {/* Demo Advance Helper Bar */}
-        <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-2 text-blue-900">
-            <span className="font-bold">Interactive Demo Control:</span>
-            <span>Advance live technician status to test customer experience.</span>
+        {/* Admin-only demo control */}
+        {currentRole === 'admin' && (
+          <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 text-blue-900">
+              <span className="font-bold">Admin Demo Control:</span>
+              <span>Advance live technician status to test the customer experience.</span>
+            </div>
+            <button
+              type="button"
+              onClick={advanceStatus}
+              disabled={currentBooking.status === 'cancelled'}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span>Advance to Next Step</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={advanceStatus}
-            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-1"
-          >
-            <span>Advance to Next Step</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        )}
 
         {/* Status Timeline Section */}
         <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm">
@@ -269,21 +388,23 @@ export const TechnicianTracking: React.FC = () => {
                 </div>
 
                 {/* Technician Van Pin */}
-                <div className="absolute bottom-16 left-16 sm:left-24 text-center">
-                  <div className="w-11 h-11 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-xl ring-4 ring-blue-300/60 mx-auto animate-bounce">
-                    <Car className="w-6 h-6" />
+                {trackingState.showVan && (
+                  <div className="absolute bottom-16 left-16 sm:left-24 text-center">
+                    <div className="w-11 h-11 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-xl ring-4 ring-blue-300/60 mx-auto animate-bounce">
+                      <Car className="w-6 h-6" />
+                    </div>
+                    <span className="mt-1 inline-block text-[11px] font-extrabold bg-blue-900 text-white px-2 py-0.5 rounded shadow-sm">
+                      Technician ({trackingState.arrival})
+                    </span>
                   </div>
-                  <span className="mt-1 inline-block text-[11px] font-extrabold bg-blue-900 text-white px-2 py-0.5 rounded shadow-sm">
-                    Technician Van (~18m away)
-                  </span>
-                </div>
+                )}
 
                 {/* Overlay status tag */}
                 <div className="absolute bottom-3 left-3 right-3 bg-white/95 backdrop-blur-sm p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-blue-600" />
-                    <span className="font-bold text-slate-800">Estimated Doorstep Arrival:</span>
-                    <span className="text-blue-700 font-extrabold">18 Minutes</span>
+                    <span className="font-bold text-slate-800">{trackingState.etaCaption}</span>
+                    <span className="text-blue-700 font-extrabold">{trackingState.arrival}</span>
                   </div>
                   <span className="text-slate-500 hidden sm:inline text-[11px]">
                     Vehicle: {technician?.vehicle || 'Mobile Repair Lab #04'}
@@ -429,7 +550,7 @@ export const TechnicianTracking: React.FC = () => {
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-sm font-extrabold text-slate-900">
                   <span>Total Payable:</span>
                   <span className="text-blue-600 text-lg">
-                    Rs. {currentBooking.estimatedCostRs.toLocaleString()}
+                    ${currentBooking.estimatedCostRs.toLocaleString()}
                   </span>
                 </div>
               </div>

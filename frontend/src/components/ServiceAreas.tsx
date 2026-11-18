@@ -30,40 +30,10 @@ export const ServiceAreas: React.FC = () => {
     const query = searchQuery.trim().toLowerCase();
 
     // Look for match in cities or hubs
-    let matchedArea = SERVICE_AREAS.find((area) =>
+    const matchedArea = SERVICE_AREAS.find((area) =>
       area.city.toLowerCase().includes(query) ||
       area.hubs.some((hub) => hub.toLowerCase().includes(query))
     );
-
-    // Also match popular generic Australian suburbs
-    const kathmanduKeywords = ['thamel', 'baneshwor', 'koteshwor', 'boudha', 'jawlakhel', 'patan dhoka', 'kalanki', 'balaju', 'maharajgunj', 'chabahil', 'cbd', 'newroad', 'putalisadak', 'kamladi'];
-    const lalitpurKeywords = ['sanepa', 'jhamsikhel', 'pulchowk', 'kupondole', 'lagankhel', 'satdobato', 'imadol', 'harishiddhi', 'balkumari', 'godawari', 'patan', 'cbd'];
-    const bhaktapurKeywords = ['suryabinayak', 'thimi', 'kaushaltar', 'gatthaghar', 'changunarayan', 'madhyapur', 'cbd'];
-    const pokharaKeywords = ['lakeside', 'mahendrapool', 'prithvi chowk', 'new road', 'chipledhunga', 'baidam', 'damside', 'cbd'];
-    const chitwanKeywords = ['narayangarh', 'bharatpur', 'ratnanagar', 'tandi', 'madi', 'khairahani', 'cbd'];
-    const biratnagarKeywords = ['main road', 'traffic chowk', 'koshi', 'rani', 'jhorahat', 'dadarbairiya', 'cbd'];
-    const butwalKeywords = ['traffic chowk', 'ramnagar', 'deepnagar', 'motipur', 'shankarnagar', 'cbd'];
-    const dharanKeywords = ['bhanu chowk', 'putali bazar', 'mahendra chowk', 'chatara', 'vijayapur', 'cbd'];
-
-    if (!matchedArea) {
-      if (kathmanduKeywords.some(k => query.includes(k))) {
-        matchedArea = SERVICE_AREAS.find(a => a.city === 'Kathmandu');
-      } else if (lalitpurKeywords.some(k => query.includes(k))) {
-        matchedArea = SERVICE_AREAS.find(a => a.city === 'Lalitpur');
-      } else if (bhaktapurKeywords.some(k => query.includes(k))) {
-        matchedArea = SERVICE_AREAS.find(a => a.city === 'Bhaktapur');
-      } else if (pokharaKeywords.some(k => query.includes(k))) {
-        matchedArea = SERVICE_AREAS.find(a => a.city === 'Pokhara');
-      } else if (chitwanKeywords.some(k => query.includes(k))) {
-        matchedArea = SERVICE_AREAS.find(a => a.city === 'Chitwan');
-      } else if (biratnagarKeywords.some(k => query.includes(k))) {
-        matchedArea = SERVICE_AREAS.find(a => a.city === 'Biratnagar');
-      } else if (butwalKeywords.some(k => query.includes(k))) {
-        matchedArea = SERVICE_AREAS.find(a => a.city === 'Butwal');
-      } else if (dharanKeywords.some(k => query.includes(k))) {
-        matchedArea = SERVICE_AREAS.find(a => a.city === 'Dharan');
-      }
-    }
 
     if (matchedArea) {
       setSearchResult({
@@ -76,7 +46,7 @@ export const ServiceAreas: React.FC = () => {
     } else {
       setSearchResult({
         matched: false,
-        message: `We currently serve Kathmandu, Lalitpur, Bhaktapur, Pokhara, Chitwan, Biratnagar, Butwal, and Dharan. While '${searchQuery}' is outside our instant dispatch zone, pickup & delivery service can be scheduled!`,
+        message: `We cover all Australian states and territories, including metro and regional hubs. While '${searchQuery}' is outside our instant doorstep dispatch zone, insured pickup and delivery service can be scheduled.`,
       });
     }
   };
@@ -86,13 +56,13 @@ export const ServiceAreas: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-3xl mx-auto mb-14">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold uppercase tracking-wider mb-3">
-            <span>Expanding Across Major Hubs</span>
+            <span>Australia-Wide Coverage</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-            Doorstep Service Coverage Areas
+            Doorstep Service Across Australia
           </h2>
           <p className="mt-3 text-slate-600 text-base sm:text-lg">
-            Our mobile repair stations are actively deployed across the following cities with fast turnaround times.
+            From capital cities to regional centres, our mobile repair stations cover every state and territory in Australia.
           </p>
 
           {/* Quick City Pills */}
@@ -117,7 +87,7 @@ export const ServiceAreas: React.FC = () => {
               <span>Check Home Service Availability in Your Area</span>
             </h3>
             <p className="text-xs text-slate-500 mb-4">
-              Enter your neighborhood, suburb, or landmark (e.g., Sanepa, Thamel, Lakeside, Narayangarh)
+              Enter your suburb, city or landmark (e.g., Surry Hills, Bondi, South Yarra, Noosa Heads)
             </p>
 
             <form onSubmit={handleCheckLocation} className="flex flex-col sm:flex-row gap-2">
@@ -127,7 +97,7 @@ export const ServiceAreas: React.FC = () => {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Enter your street, neighborhood, or area..."
+                  placeholder="Enter your suburb, city, or area..."
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white"
                 />
               </div>

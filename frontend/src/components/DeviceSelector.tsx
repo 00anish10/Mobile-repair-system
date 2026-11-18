@@ -7,7 +7,7 @@ import {
   Truck,
   Sparkles,
 } from 'lucide-react';
-import { POPULAR_BRANDS, REPAIR_ISSUES } from '../data/mockData';
+import { POPULAR_BRANDS, REPAIR_ISSUES, SERVICE_AREAS } from '../data/mockData';
 import { useRepair } from '../context/RepairContext';
 import type { ServiceType } from '../types';
 
@@ -62,6 +62,7 @@ export const DeviceSelector: React.FC = () => {
       model: selectedModel,
       problemId: selectedProblemId,
       serviceType: selectedServiceType,
+      city: selectedCity,
     });
   };
 
@@ -167,7 +168,7 @@ export const DeviceSelector: React.FC = () => {
                           </p>
                         </div>
                         <span className="text-xs font-bold text-blue-700 shrink-0">
-                          $ {issue.basePriceRs.toLocaleString()}
+                          ${issue.basePriceRs.toLocaleString()}
                         </span>
                       </button>
                     );
@@ -186,14 +187,14 @@ export const DeviceSelector: React.FC = () => {
                     onChange={(e) => setSelectedCity(e.target.value)}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
                   >
-                    <option value="Kathmandu">Kathmandu (40m Express Dispatch)</option>
-                    <option value="Lalitpur">Lalitpur (35m Express Dispatch)</option>
-                    <option value="Bhaktapur">Bhaktapur (45m Express Dispatch)</option>
-                    <option value="Pokhara">Pokhara (50m Express Dispatch)</option>
-                    <option value="Chitwan">Chitwan (55m Express Dispatch)</option>
-                    <option value="Biratnagar">Biratnagar (60m Express Dispatch)</option>
-                    <option value="Butwal">Butwal (50m Express Dispatch)</option>
-                    <option value="Dharan">Dharan (55m Express Dispatch)</option>
+                    {SERVICE_AREAS.map((area) => (
+                      <option key={area.city} value={area.city}>
+                        {area.city}, {area.state} ({area.responseTimeMinutes}m Express)
+                      </option>
+                    ))}
+                    <option value="Other Australian location">
+                      Other Australian location (pickup & delivery)
+                    </option>
                   </select>
                 </div>
 
@@ -280,7 +281,7 @@ export const DeviceSelector: React.FC = () => {
                   Estimated Repair Cost
                 </p>
                 <div className="text-3xl sm:text-4xl font-extrabold text-slate-900 mt-1">
-                  $ {calculatedPrice.toLocaleString()}
+                  ${calculatedPrice.toLocaleString()}
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">
                   Includes doorstep visit, genuine part & labor

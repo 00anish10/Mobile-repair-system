@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import {
   Phone,
   Mail,
@@ -44,10 +45,10 @@ export const Footer: React.FC = () => {
                 Book Mobile Repair
               </button>
               <a
-                href="tel:+9779801234567"
+                href="tel:+61400123456"
                 className="w-full sm:w-auto px-6 py-4 rounded-xl bg-blue-700/60 hover:bg-blue-700 border border-white/20 text-white font-bold text-sm sm:text-base transition-colors"
               >
-                Call Hotline: +977-980-123-4567
+                Call Hotline: +61 400 123 456
               </a>
             </div>
           </div>
@@ -69,7 +70,7 @@ export const Footer: React.FC = () => {
               title="Go to Home"
               aria-label="MoonMobile Home"
             >
-              <MoonLogo size="lg" variant="dark" subtitle="Premier Mobile Phone & Tech Repair in Nepal" />
+              <MoonLogo size="lg" variant="dark" subtitle="Premier Mobile Phone & Tech Repair in Australia" />
             </button>
             <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-sm">
               The premier on-demand mobile phone, smartphone, iPad, and laptop repair service. Fast, certified diagnosis and component replacement with warranty.
@@ -78,14 +79,14 @@ export const Footer: React.FC = () => {
             <div className="space-y-2 text-xs text-slate-300 pt-2">
               <div className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-blue-400" />
-                <a href="tel:+97714500900" className="hover:text-white font-semibold">
-                  +977-1-4500900 (Emergency Hotline)
+                <a href="tel:1300555012" className="hover:text-white font-semibold">
+                  1300 555 012 (Emergency Hotline)
                 </a>
               </div>
               <div className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-blue-400" />
-                <a href="tel:+9779801234567" className="hover:text-white font-semibold">
-                  +977-980-123-4567 (Mobile Hotline)
+                <a href="tel:+61400123456" className="hover:text-white font-semibold">
+                  +61 400 123 456 (Mobile Hotline)
                 </a>
               </div>
               <div className="flex items-center gap-2">
@@ -107,12 +108,12 @@ export const Footer: React.FC = () => {
               Repair Services
             </h4>
             <ul className="space-y-2 text-xs text-slate-400">
-              <li><a href="#services" className="hover:text-white transition-colors">Screen Replacement</a></li>
-              <li><a href="#services" className="hover:text-white transition-colors">Battery Replacement</a></li>
-              <li><a href="#services" className="hover:text-white transition-colors">iPhone & iPad Repairs</a></li>
-              <li><a href="#services" className="hover:text-white transition-colors">MacBook & Laptop Servicing</a></li>
-              <li><a href="#services" className="hover:text-white transition-colors">Water Damage Ultrasonic Fix</a></li>
-              <li><a href="#services" className="hover:text-white transition-colors">Charging Port & Micro-soldering</a></li>
+              <li><Link to="/#services" className="hover:text-white transition-colors">Screen Replacement</Link></li>
+              <li><Link to="/#services" className="hover:text-white transition-colors">Battery Replacement</Link></li>
+              <li><Link to="/#services" className="hover:text-white transition-colors">iPhone & iPad Repairs</Link></li>
+              <li><Link to="/#services" className="hover:text-white transition-colors">MacBook & Laptop Servicing</Link></li>
+              <li><Link to="/#services" className="hover:text-white transition-colors">Water Damage Ultrasonic Fix</Link></li>
+              <li><Link to="/#services" className="hover:text-white transition-colors">Charging Port & Micro-soldering</Link></li>
             </ul>
           </div>
 
@@ -122,11 +123,12 @@ export const Footer: React.FC = () => {
               Service Areas
             </h4>
             <ul className="space-y-2 text-xs text-slate-400">
-              <li><span className="text-slate-300">Kathmandu</span> (45-min dispatch)</li>
-              <li><span className="text-slate-300">Lalitpur</span> (Sanepa / Jhamsikhel)</li>
-              <li><span className="text-slate-300">Bhaktapur</span> (Thimi & Suryabinayak)</li>
-              <li><span className="text-slate-300">Pokhara</span> (Lakeside & Central)</li>
-              <li><span className="text-slate-300">Chitwan</span> (Narayangarh & Bharatpur)</li>
+              <li><span className="text-slate-300">Sydney</span> (NSW metro & surrounds)</li>
+              <li><span className="text-slate-300">Melbourne</span> (VIC metro & surrounds)</li>
+              <li><span className="text-slate-300">Brisbane</span> (QLD metro & surrounds)</li>
+              <li><span className="text-slate-300">Perth</span> (WA metro & surrounds)</li>
+              <li><span className="text-slate-300">Adelaide</span> (SA metro & surrounds)</li>
+              <li><span className="text-slate-300">All states & territories</span> (pickup available)</li>
             </ul>
           </div>
 
@@ -163,8 +165,9 @@ export const Footer: React.FC = () => {
                   Technician Admin Portal
                 </button>
               </li>
-              <li><a href="#faq" className="hover:text-white transition-colors">Warranty Terms & Claim</a></li>
-              <li><a href="#faq" className="hover:text-white transition-colors">Data Privacy Guarantee</a></li>
+              <li><Link to="/#faq" className="hover:text-white transition-colors">Warranty Terms & Claim</Link></li>
+              <li><Link to="/support" className="hover:text-white transition-colors">Contact Support</Link></li>
+              <li><Link to="/#faq" className="hover:text-white transition-colors">Data Privacy Guarantee</Link></li>
             </ul>
           </div>
         </div>
@@ -173,8 +176,8 @@ export const Footer: React.FC = () => {
         <div className="mt-12 pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <p>© 2026 Moon Mobile Repair Pvt. Ltd. All rights reserved.</p>
           <div className="flex items-center gap-6">
-            <span>Privacy Policy</span>
-            <span>Terms of Service</span>
+            <Link to="/privacy" className="hover:text-slate-300 transition-colors">Privacy Policy</Link>
+            <Link to="/terms" className="hover:text-slate-300 transition-colors">Terms of Service</Link>
             <button
               type="button"
               onClick={scrollToTop}

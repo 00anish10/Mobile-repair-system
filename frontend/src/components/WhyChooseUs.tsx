@@ -51,7 +51,7 @@ export const WhyChooseUs: React.FC = () => {
     {
       icon: MapPin,
       title: 'Local Service',
-      description: 'Locally rooted mobile stations across Kathmandu, Lalitpur, Bhaktapur, Pokhara, and Chitwan.',
+      description: 'Locally rooted mobile stations across Sydney, Melbourne, Brisbane, Perth, Adelaide and regional Australia.',
       color: 'text-teal-600 bg-teal-50 border-teal-200',
     },
     {

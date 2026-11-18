@@ -33,7 +33,7 @@ export const PricingSection: React.FC = () => {
       id: 'screen',
       name: 'Screen Replacement',
       icon: Monitor,
-      startingPriceRs: 3499,
+      startingPriceRs: 129,
       avgDurationMins: 35,
       warranty: '12 Months Warranty',
       highlighted: true,
@@ -49,7 +49,7 @@ export const PricingSection: React.FC = () => {
       id: 'battery',
       name: 'Battery Replacement',
       icon: BatteryCharging,
-      startingPriceRs: 1899,
+      startingPriceRs: 79,
       avgDurationMins: 25,
       warranty: '6 Months Warranty',
       features: [
@@ -64,7 +64,7 @@ export const PricingSection: React.FC = () => {
       id: 'charging_port',
       name: 'Charging Port Repair',
       icon: PlugZap,
-      startingPriceRs: 1299,
+      startingPriceRs: 69,
       avgDurationMins: 30,
       warranty: '6 Months Warranty',
       features: [
@@ -79,7 +79,7 @@ export const PricingSection: React.FC = () => {
       id: 'water_damage',
       name: 'Water Damage Repair',
       icon: Droplets,
-      startingPriceRs: 2499,
+      startingPriceRs: 129,
       avgDurationMins: 60,
       warranty: '3 Months Warranty',
       features: [
@@ -94,7 +94,7 @@ export const PricingSection: React.FC = () => {
       id: 'software',
       name: 'Software & Performance',
       icon: Sliders,
-      startingPriceRs: 999,
+      startingPriceRs: 49,
       avgDurationMins: 45,
       warranty: '30 Days Support',
       features: [
@@ -153,7 +153,7 @@ export const PricingSection: React.FC = () => {
                   <div className="my-3">
                     <span className="text-xs text-slate-500 font-medium">Starting from</span>
                     <div className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                      Rs. {tier.startingPriceRs.toLocaleString()}
+                      ${tier.startingPriceRs.toLocaleString()}
                     </div>
                   </div>
 

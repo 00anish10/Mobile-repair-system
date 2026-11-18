@@ -13,7 +13,6 @@ import {
   ArrowRight,
   ShieldCheck,
 } from 'lucide-react';
-import { SERVICE_CATEGORIES } from '../data/mockData';
 import { useRepair } from '../context/RepairContext';
 
 // Map icon string to Lucide component
@@ -45,7 +44,7 @@ const renderIcon = (iconName: string) => {
 };
 
 export const ServiceCategories: React.FC = () => {
-  const { openBookingModal } = useRepair();
+  const { openBookingModal, services } = useRepair();
 
   const handleBookCategory = (catId: string) => {
     let problemId = 'screen_replacement';
@@ -84,7 +83,7 @@ export const ServiceCategories: React.FC = () => {
 
         {/* 10 Service Cards Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-5">
-          {SERVICE_CATEGORIES.map((cat) => (
+          {services.filter((cat) => cat.isActive !== false).map((cat) => (
             <div
               key={cat.id}
               className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md hover:border-blue-300 transition-all flex flex-col justify-between group"
@@ -96,7 +95,7 @@ export const ServiceCategories: React.FC = () => {
                     {renderIcon(cat.icon)}
                   </div>
                   <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
-                    From Rs. {cat.startingPriceRs.toLocaleString()}
+                    From ${cat.startingPriceRs.toLocaleString()}
                   </span>
                 </div>
 
