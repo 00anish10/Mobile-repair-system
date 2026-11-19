@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { pool, query } from '../db.js';
-import { authenticate, optionalAuth, requireRole } from '../auth.js';
+import { authenticate, requireRole } from '../auth.js';
+import { notifyBookingCreated, notifyBookingStatusChanged } from '../notifications.js';
 import {
   assignTechnicianSchema,
   bookingCreateSchema,
@@ -111,8 +112,8 @@ const bookingSelect = `
 `;
 
 export const bookingRoutes: FastifyPluginAsync = async (fastify) => {
-  // Create a booking (guests allowed, authenticated users are linked to their account)
-  fastify.post('/', { preHandler: optionalAuth }, async (request, reply) => {
+  // Create a booking for the authenticated user
+  fastify.post('/', { preHandler: authenticate }, async (request, reply) => {
     const parsed = bookingCreateSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -122,7 +123,7 @@ export const bookingRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const data = parsed.data;
-    const userId = request.user?.id ?? data.user_id ?? null;
+    const userId = request.user!.id;
 
     let technicianId = data.technician_id ?? null;
     if (!technicianId) {
@@ -202,7 +203,9 @@ export const bookingRoutes: FastifyPluginAsync = async (fastify) => {
       ]
     );
 
-    return reply.code(201).send(toBookingJson(row));
+    const booking = toBookingJson(row);
+    void notifyBookingCreated(booking);
+    return reply.code(201).send(booking);
   });
 
   // List bookings (customers see only their own, admins see everything)
@@ -453,7 +456,9 @@ export const bookingRoutes: FastifyPluginAsync = async (fastify) => {
       [parsed.data.status, parsed.data.notes ?? null, normalizeReference(reference)]
     );
 
-    return toBookingJson(rows[0]);
+    const booking = toBookingJson(rows[0]);
+    void notifyBookingStatusChanged(booking);
+    return booking;
   });
 
   fastify.patch(

@@ -17,7 +17,17 @@ declare module 'fastify' {
   }
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
+const configuredSecret = process.env.JWT_SECRET;
+if (
+  process.env.NODE_ENV === 'production' &&
+  (!configuredSecret ||
+    configuredSecret === 'change-me-in-production' ||
+    configuredSecret.length < 32)
+) {
+  throw new Error('JWT_SECRET must be set to a random string of at least 32 characters in production');
+}
+
+const JWT_SECRET = configuredSecret || 'change-me-in-production';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 export async function hashPassword(plain: string): Promise<string> {

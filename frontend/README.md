@@ -64,6 +64,18 @@ JWT_SECRET=replace-this-with-a-long-random-string
 JWT_EXPIRES_IN=7d
 CORS_ORIGIN=http://localhost:3000,http://localhost:5173
 RUN_MIGRATIONS=true
+APP_URL=http://localhost:3000
+```
+
+`JWT_SECRET` is mandatory in production and must be at least 32 random
+characters. Add these optional integrations when you want real delivery:
+
+```env
+RESEND_API_KEY=
+NOTIFICATION_EMAIL_FROM="Moon Mobile Repair <bookings@yourdomain.com>"
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_FROM_NUMBER=
 ```
 
 If both `DATABASE_URL` and the `DB_*` values are present, `DATABASE_URL` wins.
@@ -135,7 +147,7 @@ Backend, run from `backend/`:
 - `npm run build` compiles TypeScript
 - `npm run typecheck` checks TypeScript without emitting
 - `npm run migrate` applies `schema.sql` and `seed.sql`
-- `npm test` currently runs the typecheck
+- `npm test` runs the security/schema tests and TypeScript check
 
 ## API overview
 
@@ -145,6 +157,8 @@ All routes are under `/api`.
 | --- | --- | --- |
 | POST | `/users/register` | Create a customer account |
 | POST | `/users/login` | Sign in and receive a JWT |
+| POST | `/users/forgot-password` | Request a password reset link |
+| POST | `/users/reset-password` | Complete a password reset |
 | GET | `/users/me` | Current user profile |
 | PUT | `/users/me` | Update name, phone, or avatar |
 | GET | `/technicians` | List technicians |
@@ -155,7 +169,7 @@ All routes are under `/api`.
 | POST | `/services` | Create a service (admin) |
 | PATCH | `/services/:slug` | Update a service (admin) |
 | DELETE | `/services/:slug` | Delete a service (admin) |
-| POST | `/bookings` | Create a booking |
+| POST | `/bookings` | Create a booking (JWT required) |
 | GET | `/bookings` | List bookings for the current user or all bookings for admins |
 | GET | `/bookings/:reference` | Booking details |
 | PATCH | `/bookings/:reference/status` | Update booking status |
@@ -167,6 +181,9 @@ All routes are under `/api`.
 | GET | `/devices` | Device catalog |
 | GET | `/reviews` | Customer reviews |
 | POST | `/contact` | Submit a support message |
+| GET | `/contact` | List support messages (admin) |
+| PATCH | `/contact/:id/read` | Mark a support message read (admin) |
+| DELETE | `/contact/:id` | Delete a support message (admin) |
 
 ## Project layout
 
@@ -195,12 +212,28 @@ backend/
   DATABASE_SETUP.md         pgAdmin setup guide
 ```
 
+## Production deployment
+
+A Docker Compose setup is included:
+
+```bash
+cp .env.docker.example .env
+# Edit .env and set JWT_SECRET + APP_ORIGIN
+docker compose up --build
+```
+
+The app is served at http://localhost:8080 with nginx proxying `/api` to the
+backend. PostgreSQL data is stored in the `db_data` volume.
+
 ## Notes and limitations
 
 - Bookings are stored in localStorage first and synced to the API when it is
   reachable. If the API is down, the demo still works locally.
-- Technician tracking and the map view are simulated for demonstration. They do
-  not use a live GPS feed.
+- Technician tracking uses real booking statuses, but the map pins and ETA are
+  still simulated. A live GPS feed needs a technician app or location provider.
+- Email and SMS notifications use Resend and Twilio when configured. Without
+  credentials, delivery is skipped and the API continues normally.
+- Payment selection is recorded on the booking, but no card gateway is connected.
 - The repair catalog and technician list are seeded demo data. Prices and
   availability are not connected to a third-party inventory or payment provider.
 - The theme context is still in the codebase, but the app is currently designed

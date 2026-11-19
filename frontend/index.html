@@ -13,17 +13,18 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0284c7" />
+    <link rel="apple-touch-icon" href="/pwa-192x192.png" />
   </head>
   <body class="bg-slate-50 text-slate-900 antialiased selection:bg-blue-600 selection:text-white font-['Plus_Jakarta_Sans',sans-serif]">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      if ('serviceWorker' in navigator) {
+      const isViteDev = ['3000', '5173'].includes(location.port);
+      if ('serviceWorker' in navigator && !isViteDev) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/serviceWorker.ts').then((registration) => {
-            console.log('SW registered: scope', registration.scope);
-          }).catch((err) => {
-            console.log('SW registration failed: ', err);
+          navigator.serviceWorker.register('/service-worker.js').catch((err) => {
+            console.warn('Service worker registration failed:', err);
           });
         });
       }

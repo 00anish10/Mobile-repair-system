@@ -66,6 +66,13 @@ async function request<T>(
       ? await response.json()
       : await response.text();
 
+    if (response.status === 401 && token) {
+      setToken(null);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('moon-auth-expired'));
+      }
+    }
+
     if (!response.ok) {
       const message =
         typeof payload === 'object' && payload && 'error' in payload
@@ -120,6 +127,24 @@ export function apiUpdateProfile(data: {
   return request<{ user: ApiUser }>('/users/me', {
     method: 'PUT',
     body: JSON.stringify(data),
+  });
+}
+
+export function apiMe(): Promise<{ user: ApiUser }> {
+  return request<{ user: ApiUser }>('/users/me');
+}
+
+export function apiForgotPassword(email: string): Promise<{ message: string }> {
+  return request<{ message: string }>('/users/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function apiResetPassword(token: string, password: string): Promise<{ message: string }> {
+  return request<{ message: string }>('/users/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, password }),
   });
 }
 
@@ -213,6 +238,80 @@ export function apiContact(data: {
     method: 'POST',
     body: JSON.stringify(data),
   });
+}
+
+
+export interface SupportMessage {
+  id: number;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface BookingStatsSummary {
+  totals: {
+    total: number;
+    active: number;
+    completed: number;
+    cancelled: number;
+    revenueRs: number;
+    avgCostRs: number;
+  };
+  statusDistribution: Array<{ status: string; count: number }>;
+  last7Days: Array<{ day: string; count: number; revenueRs: number }>;
+  topDevices: Array<{ device: string; count: number }>;
+  topIssues: Array<{ issue: string; count: number }>;
+  technicianLoad: Array<{
+    id: string;
+    name: string;
+    status: string;
+    activeJobs: number;
+    completedJobs: number;
+  }>;
+}
+
+export function apiListContactMessages(): Promise<SupportMessage[]> {
+  return request<SupportMessage[]>('/contact');
+}
+
+export function apiMarkContactRead(id: number): Promise<SupportMessage> {
+  return request<SupportMessage>(`/contact/${id}/read`, { method: 'PATCH' });
+}
+
+export function apiDeleteContactMessage(id: number): Promise<void> {
+  return request<void>(`/contact/${id}`, { method: 'DELETE' });
+}
+
+export function apiBookingStats(): Promise<BookingStatsSummary> {
+  return request<BookingStatsSummary>('/bookings/stats/summary');
+}
+
+export async function downloadBookingsCsv(): Promise<void> {
+  const token = getToken();
+  const response = await fetch(`${API_BASE}/bookings/export.csv`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    if (response.status === 401 && token) {
+      setToken(null);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('moon-auth-expired'));
+      }
+    }
+    throw new ApiError('Could not export bookings', response.status);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `moon-bookings-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 

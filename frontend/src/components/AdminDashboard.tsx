@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -16,6 +16,9 @@ import {
   Trash2,
   PhoneCall,
   LogOut,
+  Mail,
+  Download,
+  RefreshCw,
 } from 'lucide-react';
 import { useRepair } from '../context/RepairContext';
 import { useAuth } from '../context/AuthContext';
@@ -23,6 +26,15 @@ import type { BookingStatus, ServiceCategory, Technician } from '../types';
 import { useToast } from '../hooks/useToast';
 import { TechnicianModal } from './admin/TechnicianModal';
 import { ServiceModal } from './admin/ServiceModal';
+import {
+  apiBookingStats,
+  apiDeleteContactMessage,
+  apiListContactMessages,
+  apiMarkContactRead,
+  downloadBookingsCsv,
+  type BookingStatsSummary,
+  type SupportMessage,
+} from '../lib/api';
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -41,7 +53,9 @@ export const AdminDashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'bookings' | 'technicians' | 'services' | 'customers' | 'reports'>('overview');
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'bookings' | 'technicians' | 'services' | 'customers' | 'support' | 'reports'
+  >('overview');
   const [selectedBookingForModal, setSelectedBookingForModal] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -52,12 +66,109 @@ export const AdminDashboard: React.FC = () => {
   const { info, success, error: toastError } = useToast();
   const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [supportMessages, setSupportMessages] = useState<SupportMessage[]>([]);
+  const [supportLoading, setSupportLoading] = useState(false);
+  const [supportError, setSupportError] = useState<string | null>(null);
+  const [stats, setStats] = useState<BookingStatsSummary | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   const handleAdminLogout = () => {
     logout();
     setCurrentRole('customer');
     navigate('/');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'support') return;
+    let cancelled = false;
+    setSupportLoading(true);
+    setSupportError(null);
+    apiListContactMessages()
+      .then((messages) => {
+        if (!cancelled) setSupportMessages(messages);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setSupportError(err instanceof Error ? err.message : 'Could not load the support inbox.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSupportLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, refreshNonce]);
+
+  useEffect(() => {
+    if (activeTab !== 'reports') return;
+    let cancelled = false;
+    setStatsLoading(true);
+    setStatsError(null);
+    apiBookingStats()
+      .then((summary) => {
+        if (!cancelled) setStats(summary);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setStatsError(err instanceof Error ? err.message : 'Could not load analytics.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setStatsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, refreshNonce]);
+
+  const handleMarkSupportRead = async (message: SupportMessage) => {
+    if (message.is_read) return;
+    try {
+      const updated = await apiMarkContactRead(message.id);
+      setSupportMessages((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item))
+      );
+    } catch (err) {
+      toastError('Could not update message', {
+        description: err instanceof Error ? err.message : 'Please try again.',
+      });
+    }
+  };
+
+  const handleDeleteSupportMessage = async (message: SupportMessage) => {
+    const key = `support:${message.id}`;
+    if (confirmDeleteKey !== key) {
+      setConfirmDeleteKey(key);
+      return;
+    }
+    setDeletingKey(key);
+    try {
+      await apiDeleteContactMessage(message.id);
+      setSupportMessages((current) => current.filter((item) => item.id !== message.id));
+      success('Message removed', { description: `The message from ${message.name} was deleted.` });
+    } catch (err) {
+      toastError('Delete failed', {
+        description: err instanceof Error ? err.message : 'Could not delete the message.',
+      });
+    } finally {
+      setDeletingKey(null);
+      setConfirmDeleteKey(null);
+    }
+  };
+
+  const handleExportBookings = async () => {
+    try {
+      await downloadBookingsCsv();
+      success('Export ready', { description: 'Your bookings CSV has been downloaded.' });
+    } catch (err) {
+      toastError('Export failed', {
+        description: err instanceof Error ? err.message : 'Could not export bookings.',
+      });
+    }
   };
 
   const handleDeleteTechnician = async (tech: Technician) => {
@@ -264,6 +375,12 @@ export const AdminDashboard: React.FC = () => {
             { id: 'technicians', label: 'Technician Fleet', icon: Wrench, badge: technicians.length },
             { id: 'services', label: 'Services & Pricing', icon: DollarSign },
             { id: 'customers', label: 'Customers Directory', icon: Users },
+            {
+              id: 'support',
+              label: 'Support Inbox',
+              icon: Mail,
+              badge: supportMessages.filter((message) => !message.is_read).length || undefined,
+            },
             { id: 'reports', label: 'Analytics & Reports', icon: BarChart3 },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -272,7 +389,7 @@ export const AdminDashboard: React.FC = () => {
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setActiveTab(tab.id as 'overview' | 'bookings' | 'technicians' | 'services' | 'customers' | 'reports')}
+                onClick={() => setActiveTab(tab.id as 'overview' | 'bookings' | 'technicians' | 'services' | 'customers' | 'support' | 'reports')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
                   isSelected
                     ? 'bg-slate-900 text-white shadow-sm'
@@ -785,9 +902,236 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 6: REPORTS & ANALYTICS */}
+        {/* TAB 6: SUPPORT INBOX */}
+        {activeTab === 'support' && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">Support Inbox</h3>
+                  <p className="text-xs text-slate-500">
+                    Contact-form enquiries and support requests from customers.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">
+                    {supportMessages.filter((message) => !message.is_read).length} unread
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setRefreshNonce((value) => value + 1)}
+                    disabled={supportLoading}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${supportLoading ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {supportError && (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+                {supportError}
+              </div>
+            )}
+
+            {supportLoading && supportMessages.length === 0 && (
+              <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+                Loading support messages...
+              </div>
+            )}
+
+            {!supportLoading && !supportError && supportMessages.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+                <Mail className="mx-auto h-8 w-8 text-slate-300" />
+                <p className="mt-2 font-bold text-slate-700">Inbox empty</p>
+                <p className="text-[11px] text-slate-400">
+                  New contact-form messages will appear here.
+                </p>
+              </div>
+            )}
+
+            {supportMessages.map((message) => (
+              <div
+                key={message.id}
+                className={`rounded-2xl border p-5 shadow-xs ${
+                  message.is_read
+                    ? 'border-slate-200 bg-white'
+                    : 'border-blue-200 bg-blue-50/40'
+                }`}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                      {!message.is_read && (
+                        <span className="h-2 w-2 rounded-full bg-blue-500" aria-label="Unread" />
+                      )}
+                      {message.name}
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      {message.email} •{' '}
+                      {new Date(message.created_at).toLocaleString('en-AU', {
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!message.is_read && (
+                      <button
+                        type="button"
+                        onClick={() => void handleMarkSupportRead(message)}
+                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-50"
+                      >
+                        Mark read
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteSupportMessage(message)}
+                      disabled={deletingKey === `support:${message.id}`}
+                      className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-bold transition disabled:cursor-wait disabled:opacity-60 ${
+                        confirmDeleteKey === `support:${message.id}`
+                          ? 'border-rose-200 bg-rose-600 text-white hover:bg-rose-700'
+                          : 'border-slate-200 bg-white text-rose-600 hover:border-rose-200 hover:bg-rose-50'
+                      }`}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      {deletingKey === `support:${message.id}`
+                        ? 'Deleting'
+                        : confirmDeleteKey === `support:${message.id}`
+                          ? 'Confirm'
+                          : 'Delete'}
+                    </button>
+                  </div>
+                </div>
+                <p className="mt-3 text-sm font-bold text-slate-900">{message.subject}</p>
+                <p className="mt-1 whitespace-pre-line text-sm leading-6 text-slate-600">
+                  {message.message}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* TAB 7: REPORTS & ANALYTICS */}
         {activeTab === 'reports' && (
           <div className="space-y-6">
+
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">Server Analytics</h3>
+                  <p className="text-xs text-slate-500">
+                    Live totals from the bookings database, including the last seven days.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRefreshNonce((value) => value + 1)}
+                    disabled={statsLoading}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${statsLoading ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleExportBookings()}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Export CSV
+                  </button>
+                </div>
+              </div>
+
+              {statsError && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+                  {statsError}
+                </div>
+              )}
+
+              {statsLoading && !stats && (
+                <p className="text-sm text-slate-500">Loading server analytics...</p>
+              )}
+
+              {stats && (
+                <>
+                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+                    {[
+                      { label: 'Total bookings', value: stats.totals.total },
+                      { label: 'Active', value: stats.totals.active },
+                      { label: 'Completed', value: stats.totals.completed },
+                      { label: 'Cancelled', value: stats.totals.cancelled },
+                      { label: 'Revenue', value: `$${stats.totals.revenueRs.toLocaleString()}` },
+                    ].map((metric) => (
+                      <div key={metric.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                          {metric.label}
+                        </p>
+                        <p className="mt-1 text-xl font-black text-slate-900">{metric.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-600">
+                    <span>
+                      Average booking:{' '}
+                      <strong className="text-slate-900">
+                        ${stats.totals.avgCostRs.toLocaleString()}
+                      </strong>
+                    </span>
+                    <span>
+                      Last 7 days:{' '}
+                      <strong className="text-slate-900">
+                        {stats.last7Days.reduce((sum, day) => sum + day.count, 0)} bookings
+                      </strong>
+                    </span>
+                    <span>
+                      Revenue:{' '}
+                      <strong className="text-slate-900">
+                        ${stats.last7Days
+                          .reduce((sum, day) => sum + day.revenueRs, 0)
+                          .toLocaleString()}
+                      </strong>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="rounded-xl border border-slate-200 p-3">
+                      <p className="text-xs font-bold text-slate-700">Last 7 days</p>
+                      <div className="mt-2 space-y-1.5">
+                        {stats.last7Days.map((day) => (
+                          <div key={day.day} className="flex items-center justify-between text-[11px]">
+                            <span className="text-slate-500">{day.day}</span>
+                            <span className="font-semibold text-slate-800">
+                              {day.count} booking{day.count === 1 ? '' : 's'} · $
+                              {day.revenueRs.toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 p-3">
+                      <p className="text-xs font-bold text-slate-700">Status distribution</p>
+                      <div className="mt-2 space-y-1.5">
+                        {stats.statusDistribution.map((item) => (
+                          <div key={item.status} className="flex items-center justify-between text-[11px]">
+                            <span className="capitalize text-slate-500">
+                              {item.status.replace(/_/g, ' ')}
+                            </span>
+                            <span className="font-semibold text-slate-800">{item.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Most requested devices */}
               <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-3">

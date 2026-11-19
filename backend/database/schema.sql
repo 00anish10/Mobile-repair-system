@@ -114,6 +114,15 @@ CREATE TABLE IF NOT EXISTS bookings (
     updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id         SERIAL PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at    TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS contact_messages (
     id         SERIAL PRIMARY KEY,
     name       VARCHAR(120) NOT NULL,
@@ -326,6 +335,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_service_areas_city_unique ON service_areas
 CREATE SEQUENCE IF NOT EXISTS booking_reference_seq START WITH 125;
 
 CREATE INDEX IF NOT EXISTS idx_users_email            ON users (LOWER(email));
+CREATE INDEX IF NOT EXISTS idx_password_reset_hash   ON password_reset_tokens (token_hash);
+CREATE INDEX IF NOT EXISTS idx_password_reset_user   ON password_reset_tokens (user_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_reference     ON bookings (reference);
 CREATE INDEX IF NOT EXISTS idx_bookings_user_id       ON bookings (user_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_status        ON bookings (status);

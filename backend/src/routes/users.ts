@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { query } from '../db.js';
+import { createHash, randomBytes } from 'node:crypto';
+import { query, withTransaction } from '../db.js';
 import {
   authenticate,
   hashPassword,
@@ -9,11 +10,14 @@ import {
   verifyPassword,
   type AuthUser,
 } from '../auth.js';
+import { sendPasswordResetEmail } from '../notifications.js';
 import {
+  forgotPasswordSchema,
   formatZodError,
   loginSchema,
   profileUpdateSchema,
   registerSchema,
+  resetPasswordSchema,
 } from '../schemas.js';
 
 interface UserRow {
@@ -40,7 +44,13 @@ function toPublicUser(row: UserRow) {
 }
 
 export const userRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.post('/register', { preHandler: optionalAuth }, async (request, reply) => {
+  fastify.post(
+    '/register',
+    {
+      preHandler: optionalAuth,
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
     const parsed = registerSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -77,10 +87,14 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       role: user.role,
     });
 
-    return reply.code(201).send({ user: publicUser, token });
-  });
+      return reply.code(201).send({ user: publicUser, token });
+    }
+  );
 
-  fastify.post('/login', async (request, reply) => {
+  fastify.post(
+    '/login',
+    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -106,8 +120,97 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       role: user.role,
     });
 
-    return { user: toPublicUser(user), token };
-  });
+      return { user: toPublicUser(user), token };
+    }
+  );
+
+  fastify.post(
+    '/forgot-password',
+    { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const parsed = forgotPasswordSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: 'Validation failed',
+          fields: formatZodError(parsed.error),
+        });
+      }
+
+      const rows = await query<{ id: number; name: string; email: string }>(
+        'SELECT id, name, email FROM users WHERE LOWER(email) = LOWER($1)',
+        [parsed.data.email]
+      );
+
+      const user = rows[0];
+      if (user) {
+        const token = randomBytes(32).toString('hex');
+        const tokenHash = createHash('sha256').update(token).digest('hex');
+        const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+
+        await query(
+          `DELETE FROM password_reset_tokens
+           WHERE user_id = $1 AND (used_at IS NOT NULL OR expires_at < NOW())`,
+          [user.id]
+        );
+        await query(
+          `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+           VALUES ($1, $2, $3)`,
+          [user.id, tokenHash, expiresAt]
+        );
+
+        void sendPasswordResetEmail(user.email, user.name, token).catch((error) => {
+          console.error('[password-reset] email delivery failed:', error);
+        });
+      }
+
+      return {
+        message: 'If an account exists for that email, a password reset link has been sent.',
+      };
+    }
+  );
+
+  fastify.post(
+    '/reset-password',
+    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const parsed = resetPasswordSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: 'Validation failed',
+          fields: formatZodError(parsed.error),
+        });
+      }
+
+      const tokenHash = createHash('sha256').update(parsed.data.token).digest('hex');
+      const rows = await query<{ id: number; user_id: number }>(
+        `SELECT id, user_id FROM password_reset_tokens
+         WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()`,
+        [tokenHash]
+      );
+
+      const tokenRow = rows[0];
+      if (!tokenRow) {
+        return reply.code(400).send({ error: 'This reset link is invalid or has expired.' });
+      }
+
+      const passwordHash = await hashPassword(parsed.data.password);
+      await withTransaction(async (client) => {
+        await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [
+          passwordHash,
+          tokenRow.user_id,
+        ]);
+        await client.query('UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1', [
+          tokenRow.id,
+        ]);
+        await client.query(
+          'DELETE FROM password_reset_tokens WHERE user_id = $1 AND id <> $2',
+          [tokenRow.user_id, tokenRow.id]
+        );
+      });
+
+      return { message: 'Your password has been reset. You can now sign in.' };
+    }
+  );
 
   fastify.get('/me', { preHandler: authenticate }, async (request, reply) => {
     const rows = await query<UserRow>('SELECT * FROM users WHERE id = $1', [request.user!.id]);

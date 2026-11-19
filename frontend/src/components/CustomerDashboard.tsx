@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   User,
   Calendar,
@@ -15,6 +15,29 @@ import {
 import { useRepair } from '../context/RepairContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../hooks/useToast';
+
+interface SavedAddress {
+  id: string;
+  title: string;
+  address: string;
+  area: string;
+  city: string;
+  landmark: string;
+  isDefault: boolean;
+}
+
+function relativeTime(iso: string): string {
+  const timestamp = new Date(iso).getTime();
+  if (Number.isNaN(timestamp)) return 'Just now';
+  const minutes = Math.max(0, Math.round((Date.now() - timestamp) / 60000));
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
+  return new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+}
 
 export const CustomerDashboard: React.FC = () => {
   const {
@@ -37,7 +60,21 @@ export const CustomerDashboard: React.FC = () => {
   const [phone, setPhone] = useState(user?.phone || '');
   const [email, setEmail] = useState(userEmail || user?.email || '');
   const [profileSaved, setProfileSaved] = useState(false);
-  const [referralsEarned] = useState(3);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [addressFormOpen, setAddressFormOpen] = useState(false);
+  const [newAddress, setNewAddress] = useState({
+    title: '',
+    address: '',
+    area: '',
+    city: '',
+    landmark: '',
+  });
+  const [referralsEarned, setReferralsEarned] = useState(0);
+  const [shareMessage, setShareMessage] = useState('');
+
+  const accountKey = (user?.email || email).trim().toLowerCase();
+  const addressStorageKey = accountKey ? `moon_saved_addresses_${accountKey}` : '';
+  const referralStorageKey = accountKey ? `moon_referrals_${accountKey}` : '';
 
   useEffect(() => {
     if (!user) return;
@@ -46,52 +83,125 @@ export const CustomerDashboard: React.FC = () => {
     setEmail(user.email);
   }, [user]);
 
-  // Saved addresses
-  const [savedAddresses] = useState([
-    {
-      id: 'addr-1',
-      title: 'Home (Surry Hills)',
-      address: 'Unit 12, 88 Crown Street',
-      area: 'Surry Hills',
-      city: 'Sydney',
-      landmark: 'Near Crown Street Public School',
-      isDefault: true,
-    },
-    {
-      id: 'addr-2',
-      title: 'Workplace (Melbourne CBD)',
-      address: 'Level 8, 120 Collins Street',
-      area: 'Melbourne CBD',
-      city: 'Melbourne',
-      landmark: 'Near Parliament Station',
-      isDefault: false,
-    },
-  ]);
+  useEffect(() => {
+    if (!addressStorageKey) {
+      setSavedAddresses([]);
+      return;
+    }
+    try {
+      const stored = JSON.parse(localStorage.getItem(addressStorageKey) || '[]');
+      setSavedAddresses(Array.isArray(stored) ? (stored as SavedAddress[]) : []);
+    } catch {
+      setSavedAddresses([]);
+    }
+  }, [addressStorageKey]);
 
-  // Notifications
-  const notifications = [
-    {
-      id: 'notif-1',
-      title: 'Technician En Route',
-      message: 'Technician Jack Thompson is travelling to your Surry Hills address. Estimated arrival: 18 mins.',
-      time: '10 minutes ago',
-      unread: true,
-    },
-    {
-      id: 'notif-2',
-      title: 'Booking Confirmed (#REP-2026-00125)',
-      message: 'Your iPhone 15 Pro screen replacement appointment has been scheduled.',
-      time: '2 hours ago',
-      unread: true,
-    },
-    {
-      id: 'notif-3',
-      title: 'Warranty Activated (#REP-2026-00118)',
-      message: '6-Month doorstep battery warranty active until March 2027.',
-      time: '2 days ago',
-      unread: false,
-    },
-  ];
+  useEffect(() => {
+    if (!referralStorageKey) {
+      setReferralsEarned(0);
+      return;
+    }
+    const stored = Number(localStorage.getItem(referralStorageKey) || '0');
+    setReferralsEarned(Number.isFinite(stored) ? stored : 0);
+  }, [referralStorageKey]);
+
+  const persistAddresses = (next: SavedAddress[]) => {
+    setSavedAddresses(next);
+    if (addressStorageKey) {
+      localStorage.setItem(addressStorageKey, JSON.stringify(next));
+    }
+  };
+
+  const handleAddAddress = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!newAddress.title.trim() || !newAddress.address.trim() || !newAddress.city.trim()) {
+      info('Address details needed', {
+        description: 'Add a label, street address, and city before saving.',
+      });
+      return;
+    }
+    const address: SavedAddress = {
+      id: `addr-${Date.now()}`,
+      title: newAddress.title.trim(),
+      address: newAddress.address.trim(),
+      area: newAddress.area.trim(),
+      city: newAddress.city.trim(),
+      landmark: newAddress.landmark.trim(),
+      isDefault: savedAddresses.length === 0,
+    };
+    persistAddresses([...savedAddresses, address]);
+    setNewAddress({ title: '', address: '', area: '', city: '', landmark: '' });
+    setAddressFormOpen(false);
+    success('Address saved', { description: `${address.title} is ready for your next booking.` });
+  };
+
+  const handleRemoveAddress = (id: string) => {
+    const next = savedAddresses.filter((address) => address.id !== id);
+    if (next.length > 0 && !next.some((address) => address.isDefault)) {
+      next[0] = { ...next[0], isDefault: true };
+    }
+    persistAddresses(next);
+    info('Address removed', { description: 'The saved location was deleted.' });
+  };
+
+  const handleSetDefaultAddress = (id: string) => {
+    persistAddresses(
+      savedAddresses.map((address) => ({ ...address, isDefault: address.id === id }))
+    );
+  };
+
+  const notifications = useMemo(() => {
+    const content: Record<string, { title: string; message: string }> = {
+      confirmed: {
+        title: 'Booking confirmed',
+        message: 'Your repair has been booked. A technician will be assigned shortly.',
+      },
+      technician_assigned: {
+        title: 'Technician assigned',
+        message: 'A technician has been matched to your repair and will contact you before arrival.',
+      },
+      technician_en_route: {
+        title: 'Technician on the way',
+        message: 'Your technician is travelling to your address now.',
+      },
+      technician_arrived: {
+        title: 'Technician arrived',
+        message: 'Your technician has arrived and is ready to start the repair.',
+      },
+      in_progress: {
+        title: 'Repair in progress',
+        message: 'Your device is currently being repaired.',
+      },
+      completed: {
+        title: 'Repair completed',
+        message: 'Your repair is complete. Your warranty has been activated.',
+      },
+      cancelled: {
+        title: 'Booking cancelled',
+        message: 'This repair booking has been cancelled.',
+      },
+    };
+
+    return bookings
+      .slice()
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 8)
+      .map((booking) => {
+        const detail = content[booking.status] || {
+          title: 'Booking updated',
+          message: 'Your booking status has changed.',
+        };
+        return {
+          id: booking.id,
+          title: `${detail.title} (${booking.id})`,
+          message: `${booking.brand} ${booking.model} - ${booking.problemTitle}. ${detail.message}`,
+          time: relativeTime(booking.createdAt),
+          unread: booking.status !== 'completed' && booking.status !== 'cancelled',
+        };
+      });
+  }, [bookings]);
+
+  const unreadNotifications = notifications.filter((notification) => notification.unread).length;
 
   const upcomingRepairs = bookings.filter(
     (b) => b.status !== 'completed' && b.status !== 'cancelled'
@@ -114,7 +224,19 @@ export const CustomerDashboard: React.FC = () => {
     setTimeout(() => setProfileSaved(false), 3000);
   };
 
-  const referralCode = `MOON2026${referralsEarned}`;
+  const referralCode = useMemo(() => {
+    const base = (user?.id || user?.email || 'friend')
+      .replace(/[^a-z0-9]/gi, '')
+      .slice(-6)
+      .toUpperCase();
+    return `MOON-${base || 'FRIEND'}`;
+  }, [user?.email, user?.id]);
+
+  useEffect(() => {
+    setShareMessage(
+      `Get $50 off your first mobile repair with Moon Mobile Repair. Use my code ${referralCode}.`
+    );
+  }, [referralCode]);
 
   const handleCopyReferral = async () => {
     try {
@@ -122,6 +244,20 @@ export const CustomerDashboard: React.FC = () => {
       success('Referral code copied', { description: referralCode });
     } catch {
       success('Your referral code', { description: referralCode });
+    }
+  };
+
+  const handleShareReferral = async () => {
+    const text = shareMessage.trim() || `Use my Moon Mobile Repair code ${referralCode}.`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Moon Mobile Repair', text });
+      } else {
+        await navigator.clipboard.writeText(text);
+        success('Share message copied', { description: 'Paste it into your favourite app.' });
+      }
+    } catch {
+      info('Share cancelled', { description: 'Your referral details are still available.' });
     }
   };
 
@@ -171,7 +307,7 @@ export const CustomerDashboard: React.FC = () => {
               { id: 'history', label: 'Repair History', icon: CheckCircle2, badge: completedRepairs.length },
               { id: 'warranties', label: 'Warranty Vault', icon: ShieldCheck, badge: bookings.length },
               { id: 'addresses', label: 'Saved Addresses', icon: MapPin, badge: savedAddresses.length },
-              { id: 'notifications', label: 'Notifications', icon: Bell, badge: 2 },
+              { id: 'notifications', label: 'Notifications', icon: Bell, badge: unreadNotifications },
               { id: 'profile', label: 'Profile Settings', icon: User },
               { id: 'referrals', label: 'Referral Program', icon: Sparkles, badge: referralsEarned > 0 ? referralsEarned : undefined },
             ].map((tab) => {
@@ -382,12 +518,71 @@ export const CustomerDashboard: React.FC = () => {
                   <h2 className="text-lg font-bold text-slate-900">Saved Doorstep Locations</h2>
                   <button
                     type="button"
-                    onClick={() => info('Saved addresses', { description: 'Add or edit addresses during checkout in the booking flow.' })}
+                    onClick={() => setAddressFormOpen((open) => !open)}
                     className="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs rounded-lg transition-colors"
                   >
-                    + Add Address
+                    {addressFormOpen ? 'Cancel' : '+ Add Address'}
                   </button>
                 </div>
+
+                {addressFormOpen && (
+                  <form
+                    onSubmit={handleAddAddress}
+                    className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3"
+                  >
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {[
+                        { key: 'title', label: 'Label', placeholder: 'Home, Work, etc.' },
+                        { key: 'address', label: 'Street address', placeholder: 'Unit 1, 12 Example St' },
+                        { key: 'area', label: 'Suburb / area', placeholder: 'Surry Hills' },
+                        { key: 'city', label: 'City', placeholder: 'Sydney' },
+                      ].map((field) => (
+                        <div key={field.key}>
+                          <label
+                            htmlFor={`address-${field.key}`}
+                            className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-500"
+                          >
+                            {field.label}
+                          </label>
+                          <input
+                            id={`address-${field.key}`}
+                            type="text"
+                            value={newAddress[field.key as keyof typeof newAddress]}
+                            onChange={(event) =>
+                              setNewAddress({ ...newAddress, [field.key]: event.target.value })
+                            }
+                            placeholder={field.placeholder}
+                            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900"
+                          />
+                        </div>
+                      ))}
+                      <div className="sm:col-span-2">
+                        <label
+                          htmlFor="address-landmark"
+                          className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-500"
+                        >
+                          Landmark (optional)
+                        </label>
+                        <input
+                          id="address-landmark"
+                          type="text"
+                          value={newAddress.landmark}
+                          onChange={(event) =>
+                            setNewAddress({ ...newAddress, landmark: event.target.value })
+                          }
+                          placeholder="Near the train station"
+                          className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="submit"
+                      className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
+                    >
+                      Save Address
+                    </button>
+                  </form>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {savedAddresses.map((addr) => (
@@ -406,9 +601,38 @@ export const CustomerDashboard: React.FC = () => {
                       <p className="text-xs text-slate-600 leading-snug">
                         {addr.address}, {addr.area}, {addr.city}
                       </p>
-                      <p className="text-[11px] text-slate-400">Landmark: {addr.landmark}</p>
+                      <p className="text-[11px] text-slate-400">
+                        Landmark: {addr.landmark || 'Not provided'}
+                      </p>
+                      <div className="flex items-center gap-3 border-t border-slate-100 pt-2 text-[11px] font-bold">
+                        {!addr.isDefault && (
+                          <button
+                            type="button"
+                            onClick={() => handleSetDefaultAddress(addr.id)}
+                            className="text-blue-700 hover:underline"
+                          >
+                            Set default
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAddress(addr.id)}
+                          className="text-rose-600 hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
                   ))}
+                  {savedAddresses.length === 0 && (
+                    <div className="sm:col-span-2 rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
+                      <MapPin className="mx-auto h-8 w-8 text-slate-300" />
+                      <p className="mt-2 text-sm font-bold text-slate-700">No saved addresses</p>
+                      <p className="text-[11px] text-slate-400">
+                        Add your home or workplace to speed up your next booking.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -417,6 +641,9 @@ export const CustomerDashboard: React.FC = () => {
             {activeTab === 'notifications' && (
               <div className="space-y-3">
                 <h2 className="text-lg font-bold text-slate-900">Notifications & Alerts</h2>
+                <p className="text-xs text-slate-500">
+                  Generated from your live booking statuses.
+                </p>
                 {notifications.map((n) => (
                   <div
                     key={n.id}
@@ -433,6 +660,15 @@ export const CustomerDashboard: React.FC = () => {
                     <p className="text-xs text-slate-600">{n.message}</p>
                   </div>
                 ))}
+                {notifications.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
+                    <Bell className="mx-auto h-8 w-8 text-slate-300" />
+                    <p className="mt-2 text-sm font-bold text-slate-700">No notifications yet</p>
+                    <p className="text-[11px] text-slate-400">
+                      Booking updates will appear here automatically.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -526,6 +762,8 @@ export const CustomerDashboard: React.FC = () => {
                   <div>
                     <textarea
                       rows={2}
+                      value={shareMessage}
+                      onChange={(event) => setShareMessage(event.target.value)}
                       placeholder="Message to share..."
                       className="w-full pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-base font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                     />
@@ -540,6 +778,7 @@ export const CustomerDashboard: React.FC = () => {
                     </button>
                     <button
                       type="button"
+                      onClick={() => void handleShareReferral()}
                       className="py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition-all cursor-pointer shadow-md shadow-emerald-500/25 hover:shadow-xl">
                       Share
                     </button>

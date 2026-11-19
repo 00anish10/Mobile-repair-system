@@ -73,7 +73,10 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
     }));
   });
 
-  fastify.post('/contact', async (request, reply) => {
+  fastify.post(
+    '/contact',
+    { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    async (request, reply) => {
     const parsed = contactMessageSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -103,6 +106,42 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
          FROM contact_messages ORDER BY created_at DESC LIMIT 200`
       );
       return rows;
+    }
+  );
+
+  fastify.patch(
+    '/contact/:id/read',
+    { preHandler: [authenticate, requireRole('admin')] },
+    async (request, reply) => {
+      const id = Number((request.params as { id: string }).id);
+      if (!Number.isInteger(id) || id < 1) {
+        return reply.code(400).send({ error: 'Invalid message id' });
+      }
+      const rows = await query(
+        `UPDATE contact_messages SET is_read = true WHERE id = $1
+         RETURNING id, name, email, subject, message, is_read, created_at`,
+        [id]
+      );
+      if (rows.length === 0) {
+        return reply.code(404).send({ error: 'Message not found' });
+      }
+      return rows[0];
+    }
+  );
+
+  fastify.delete(
+    '/contact/:id',
+    { preHandler: [authenticate, requireRole('admin')] },
+    async (request, reply) => {
+      const id = Number((request.params as { id: string }).id);
+      if (!Number.isInteger(id) || id < 1) {
+        return reply.code(400).send({ error: 'Invalid message id' });
+      }
+      const rows = await query('DELETE FROM contact_messages WHERE id = $1 RETURNING id', [id]);
+      if (rows.length === 0) {
+        return reply.code(404).send({ error: 'Message not found' });
+      }
+      return reply.code(204).send();
     }
   );
 };

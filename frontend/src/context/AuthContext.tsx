@@ -1,5 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import { ApiError, apiLogin, apiRegister, apiUpdateProfile, isNetworkError, setToken, type ApiUser } from '../lib/api';
+import {
+  ApiError,
+  apiLogin,
+  apiMe,
+  apiRegister,
+  apiUpdateProfile,
+  getToken,
+  isNetworkError,
+  setToken,
+  type ApiUser,
+} from '../lib/api';
 
 export type UserRole = 'customer' | 'admin' | null;
 
@@ -100,6 +110,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [user]);
 
+  useEffect(() => {
+    const handleExpired = () => setUser(null);
+    window.addEventListener('moon-auth-expired', handleExpired);
+    return () => window.removeEventListener('moon-auth-expired', handleExpired);
+  }, []);
+
+  useEffect(() => {
+    if (!getToken()) {
+      if (!import.meta.env.DEV) setUser(null);
+      return;
+    }
+    let cancelled = false;
+    apiMe()
+      .then((response) => {
+        if (!cancelled) setUser(mapApiUser(response.user));
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        if (error instanceof ApiError && error.status === 401) {
+          setToken(null);
+          setUser(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const login = async (email: string, password: string): Promise<User | null> => {
     try {
       const response = await apiLogin(email, password);
@@ -108,10 +146,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setUser(mapped);
       return mapped;
     } catch (error) {
-      // Allow the offline demo experience when the API is unavailable.
+      // Allow the offline demo experience in development only.
       const apiUnavailable =
         isNetworkError(error) || (error instanceof ApiError && error.status >= 500);
-      if (apiUnavailable) {
+      if (import.meta.env.DEV && apiUnavailable) {
         await new Promise((resolve) => setTimeout(resolve, 400));
         const demoUser = demoLogin(email, password);
         if (demoUser) {
@@ -139,6 +177,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error instanceof ApiError && error.status !== 0 && error.status < 500) {
         return false;
       }
+      if (!import.meta.env.DEV) return false;
       // Offline fallback keeps the demo usable without the backend running.
       await new Promise((resolve) => setTimeout(resolve, 400));
       const exists = DEMO_USERS.some(

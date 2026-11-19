@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import {
   assertDatabaseConnection,
   closePool,
@@ -26,6 +27,7 @@ const app = Fastify({
         : undefined,
   },
   bodyLimit: 2 * 1024 * 1024,
+  trustProxy: process.env.TRUST_PROXY === 'true',
 });
 
 function parseOrigins(): string[] | true | false {
@@ -43,6 +45,12 @@ async function buildServer() {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
+  });
+
+  await app.register(rateLimit, {
+    max: 120,
+    timeWindow: '1 minute',
+    allowList: (request) => request.url === '/api/health',
   });
 
   app.get('/api/health', async (_request, reply) => {
@@ -68,7 +76,13 @@ async function buildServer() {
     name: 'Moon Mobile Repair API',
     version: '1.0.0',
     documentation: {
-      auth: ['POST /api/users/register', 'POST /api/users/login', 'GET /api/users/me'],
+      auth: [
+        'POST /api/users/register',
+        'POST /api/users/login',
+        'POST /api/users/forgot-password',
+        'POST /api/users/reset-password',
+        'GET /api/users/me',
+      ],
       bookings: [
         'POST /api/bookings',
         'GET /api/bookings',
@@ -85,6 +99,9 @@ async function buildServer() {
         'GET /api/devices',
         'GET /api/reviews',
         'POST /api/contact',
+        'GET /api/contact (admin)',
+        'PATCH /api/contact/:id/read (admin)',
+        'DELETE /api/contact/:id (admin)',
       ],
     },
   }));

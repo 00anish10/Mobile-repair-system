@@ -6,16 +6,18 @@ export const phoneSchema = z
   .min(8, 'Phone number too short')
   .max(40, 'Phone number too long');
 
+export const passwordSchema = z
+  .string()
+  .min(8, 'Password must be at least 8 characters')
+  .max(128)
+  .regex(/[A-Z]/, 'Password must contain an uppercase letter')
+  .regex(/[a-z]/, 'Password must contain a lowercase letter')
+  .regex(/[0-9]/, 'Password must contain a number');
+
 export const registerSchema = z.object({
   name: z.string().trim().min(2, 'Name must be at least 2 characters').max(120),
   email: z.string().trim().toLowerCase().email('A valid email is required').max(255),
-  password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters')
-    .max(128)
-    .regex(/[A-Z]/, 'Password must contain an uppercase letter')
-    .regex(/[a-z]/, 'Password must contain a lowercase letter')
-    .regex(/[0-9]/, 'Password must contain a number'),
+  password: passwordSchema,
   phone: phoneSchema.optional(),
   role: z.enum(['customer', 'admin', 'technician']).optional(),
 });
@@ -23,6 +25,15 @@ export const registerSchema = z.object({
 export const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email('A valid email is required'),
   password: z.string().min(1, 'Password is required'),
+});
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().trim().toLowerCase().email('A valid email is required'),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().trim().min(32, 'Reset token is invalid').max(256),
+  password: passwordSchema,
 });
 
 export const profileUpdateSchema = z
@@ -40,7 +51,6 @@ const isoDate = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD');
 
 export const bookingCreateSchema = z.object({
-  user_id: z.coerce.number().int().positive().optional(),
   reference: z.string().trim().max(40).optional(),
   customer_name: z.string().trim().min(2).max(120),
   customer_phone: phoneSchema,

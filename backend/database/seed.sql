@@ -68,8 +68,27 @@ WHERE NOT EXISTS (
 );
 
 -- Service areas across Australia -------------------------------------------
+-- Remove legacy Nepal service areas and any duplicate city rows before
+-- ensuring the ON CONFLICT target exists on older databases.
 DELETE FROM service_areas
-WHERE city IN ('Kathmandu','Lalitpur','Bhaktapur','Pokhara','Chitwan','Biratnagar','Butwal','Dharan');
+WHERE city IN (
+    'Kathmandu','Lalitpur','Bhaktapur','Pokhara','Chitwan','Biratnagar','Butwal','Dharan',
+    'Birgunj','Janakpur','Hetauda','Nepalgunj','Dhangadhi','Itahari','Bhairahawa',
+    'Siddharthanagar','Birendranagar','Ghorahi','Tulsipur','Damak','Kirtipur','Patan',
+    'Banepa','Dhulikhel','Panauti','Gorkha','Baglung','Waling','Damauli','Bharatpur',
+    'Ratnanagar','Kawasoti','Gaindakot','Tansen','Kapilvastu','Taulihawa','Krishnanagar',
+    'Gulariya','Rajbiraj','Lahan','Siraha','Jaleshwar','Malangwa','Gaur','Kalaiya',
+    'Mechinagar','Bhadrapur','Ilam','Dhankuta','Khandbari','Bhojpur','Diktel',
+    'Okhaldhunga','Salleri','Charikot','Jiri','Manthali','Ramechhap','Kamalamai',
+    'Bardibas','Lalbandi','Simara','Jitpur','Chandrapur','Nijgadh'
+);
+
+DELETE FROM service_areas a
+USING service_areas b
+WHERE a.city = b.city AND a.id > b.id;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_service_areas_city_unique
+    ON service_areas (city);
 
 INSERT INTO service_areas (city, state, is_available, hubs, response_time_minutes, technicians_count)
 VALUES
@@ -137,7 +156,12 @@ VALUES
      '["Alice Springs CBD","Larapinta","Braitling","Ross","Gillen"]'::jsonb, 60, 1),
     ('Katherine', 'Northern Territory', TRUE,
      '["Katherine CBD","Katherine East","Katherine South","Cossack","Lansdowne"]'::jsonb, 60, 1)
-ON CONFLICT (city) DO NOTHING;
+ON CONFLICT (city) DO UPDATE SET
+    state = EXCLUDED.state,
+    is_available = EXCLUDED.is_available,
+    hubs = EXCLUDED.hubs,
+    response_time_minutes = EXCLUDED.response_time_minutes,
+    technicians_count = EXCLUDED.technicians_count;
 
 -- Devices ------------------------------------------------------------------
 INSERT INTO devices (name, category, description, image_url)
